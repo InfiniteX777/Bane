@@ -1,43 +1,27 @@
-import asset.api.sen as senpai
-import asset.api.ahoge as ahoge
-import sys, pygame, socket, time
+import sys, pygame, time
 
-ahoge.server_start(ahoge.ip, 5005)
+# Initialize.
+pygame.init()
 
-speed = [1, 1]
+# Call senpai.
+import asset.api.SenPy as senpai
+ahoge = senpai.remote["ahoge"]
+kouhai = senpai.remote["kouhai"]
+imouto = senpai.remote["imouto"]
+kuudere = senpai.remote["kuudere"]
 
-ball = pygame.image.load("ball.bmp")
-ballrect = ball.get_rect()
+# Make imouto pretty.
+imouto.background = (255, 255, 255)
 
-def update(dt):
-	global ballrect
+# Start the game.
+imouto.start(
+	120,
+	(800, 600),
+	pygame.HWSURFACE|pygame.DOUBLEBUF|pygame.RESIZABLE
+)
 
-	ballrect = ballrect.move(speed)
-	if ballrect.left < 0 or ballrect.right > senpai.width:
-		speed[0] = -speed[0]
-	if ballrect.top < 0 or ballrect.bottom > senpai.height:
-		speed[1] = -speed[1]
-
-	senpai.screen.blit(ball, ballrect)
-
-bob = ahoge.stream(ahoge.ip, 5005)
-print(bob.status)
-
-def test(data):
-	print(data)
-	bob.send("yo")
-
-def nein(sock, addr, data):
-	print(data)
-
-bob.on_recv(test)
-ahoge.on_recv(nein, bob.sock.getsockname())
-ahoge.broadcast("hey")
-
-def yes(*l):
-	bob.send("hi")
-
-senpai.on("update", update)
+# Ask for name.
+import asset.ext.interface_name
 
 while True:
-	senpai.update()
+	imouto.update()
