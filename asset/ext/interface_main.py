@@ -20,6 +20,7 @@ room = {
 	}
 }
 chatbox = {}
+chatbox_id = 2
 name = ""
 
 chat.set_server(server, code) # Set server.
@@ -40,10 +41,19 @@ def broadcast(code, data):
 
 # Server
 
-def on_recv(addr, data):
-	global room, code, selected_room
+def on_recv(data, addr):
+	''' id = The scope of the chat room.
+			0 = Server-Wide
+			1 = 2-User
+			2~= Multi-User
+		code = The encoded address.
+		name = The name of the user.
+	'''
+	global room, code, selected_room, chatbox
 
 	if data[:6] == "REQCON": # Request Connection (Room)
+		# REQCON[code]:[name]
+
 		if addr in room[code]:
 			return # Already connected.
 
@@ -65,11 +75,42 @@ def on_recv(addr, data):
 				res += "_" + socket_encoder.encode(*k) + ":" + v
 
 		server.send(res, addr, True)
+	elif data[:6] == "REQPLR": # Request Player
+		# Sends the player list of the given room.
+		# REQPLR[id][code]
+		i = data[6:]
+		tag = i
+		list = None
+
+		if i[0] == "0":
+			# Server Chat
+			dat = data[7:]
+
+			if dat in room:
+				list = room[dat]
+		else:
+			# Private Chat
+			if i[0] == "1":
+				i = i[1:]
+				tag = "1" + code
+
+			if i in chatbox:
+				list = chatbox[i].players
+
+		if list:
+			res = "DATPLR" + tag
+
+			for k, v in list.items():
+				if type(k) == tuple:
+					res += "_" + socket_encoder.encode(*k) + ":" + v
+
+			server.send(res, addr, True)
 	elif data[:6] == "REQDIS": # Request Disconnect
 		data = data[6:]
 
 		if len(data) > 0:
 			# Server closed.
+			# REQDIS
 			if data in room:
 				if selected_room == data:
 					selected_room = code
@@ -80,6 +121,7 @@ def on_recv(addr, data):
 				del room[data]
 		else:
 			# Player disconnected.
+			# REQDIS[code]
 			dat = room[code][addr]
 
 			del room[code][addr]
@@ -90,20 +132,9 @@ def on_recv(addr, data):
 
 			if selected_room == code:
 				player_update()
-	if data[:6] == "REQCHT": # Request Chat
-		sep = data.index("_")
-		i = int(data[6:sep])
-		dat = data[sep+1:]
-
-		chatbox = chat.Chatbox(addr)
-		chatbox.players[addr] = dat
-		chatbox.chat("Connected to " + addr[0] + ":" + addr[1] + "...")
-		chatbox.update()
-
-		# Send validation.
-		server.send("DATCON" + i + "_" + players[server[addr]], addr)
 	elif data[:6] == "DATCON": # Data Connection
 		# Collect players in the server.
+		# DATCON[code]_[code1]:[name1]_[code2]:[name2]...
 		code_host = None
 
 		for v in re.split("_", data[6:]):
@@ -120,32 +151,42 @@ def on_recv(addr, data):
 
 		room_update()
 	elif data[:6] == "DATPLR": # Data Player
+		# Informs a player is connected in a room.
+		# DATPLR[id][code]_[code1]:[name1]_[code2]:[name2]...
 		sep = data.index("_")
 		i = data[6:sep]
-		dat = data[sep+1:]
 
-		if i[0] == "0" and i[1:] in room:
-			# Global Room DATPLR0[code]_[addr]:[name]
-			sep = dat.index(":")
+		if i[0] == "0":
+			# Global Room
 			i = i[1:]
-			addr = socket_encoder.decode(dat[:sep])
-			dat = dat[sep+1:]
-			room[i][addr] = dat
 
-			chat_append(i, "'" + dat + "' has connected.")
+			if i in room:
+				for v in re.split("_", data[sep+1:]):
+					sep = v.index(":")
+					addr = socket_encoder.decode(dat[:sep])
+					dat = v[sep+1:]
+					room[i][addr] = dat
 
-			if selected_room == i:
-				player_update()
+					chat_append(i, "'" + dat + "' has connected.")
+
+				if selected_room == i:
+					player_update()
 		else:
-			# Private Room DATPLR[chatnum]_[addr]:[name]
-			pass
+			# Private Room
+			if i[0] == "1":
+				i = i[1:]
+
+			if i in chatbox:
+				for v in re.split("_", data[sep+1:]):
+					sep = v.index(":")
+					chatbox[i].players[socket_encoder.decode(v[:sep])] = v[sep+1:]
 	elif data[:6] == "DATDIS": # Data Disconnect
 		sep = data.index("_")
 		i = data[6:sep]
 		dat = data[sep+1:]
 
 		if i[0] == "0" and i[1:] in room:
-			# Global Room DATPLR0[code]_[addr]:[name]
+			# Global Room DATPLR0[code]_[code]:[name]
 			sep = dat.index(":")
 			i = i[1:]
 			addr = socket_encoder.decode(dat[:sep])
@@ -158,24 +199,40 @@ def on_recv(addr, data):
 			if selected_room == i:
 				player_update()
 		else:
-			# Private Room DATPLR[chatnum]_[addr]:[name]
+			# Private Room DATPLR[chatnum]_[code]:[name]
 			pass
 	elif data[:6] == "DATCHT": # Data Chat
+		# Sends chat data to a room.
+		# DATCHT[id][code]_[text]
+		# 0 = Global
+		# 1 = 2-Person
+		# 2~ = Multi-Person
 		sep = data.index("_")
 		i = data[6:sep]
-		dat = data[sep+1:]
+		text = data[sep+1:]
 
-		if i[0] == "0" and i[1:] in room:
+		if i[0] == "0":
 			# Global Chat
-			i = i[1:]
+			i = data[7:sep]
 
-			room[i]["_chat"].append(dat)
-			chat_append(i, dat)
+			if i in room:
+				room[i]["_chat"].append(text)
+				chat_append(i, text)
 		else:
-			i = int(i[1:])
+			tag = i
 
-			if i in chat.cache:
-				chat.cache[i].chat(data[sep+1:])
+			if i[0] == "1":
+				i = i[1:]
+				tag = "1" + code
+
+			if i not in chatbox:
+				chatbox[i] = chat.Chatbox(addr[0] + ":" + str(addr[1]))
+				chatbox[i].tag = tag
+
+				chatbox[i].update()
+				server.send("REQPLR" + tag, addr)
+
+			chatbox[i].append(text)
 
 server.on_recv(on_recv)
 
@@ -248,17 +305,19 @@ def player_mousebuttondown(event):
 	global room, selected_room, chatbox
 	i = int(event.pos[1]/30) + scroll_player
 
-	for addr, name in room[selected_room]:
+	for addr, name in room[selected_room].items():
 		if type(addr) == tuple:
 			if i > 0:
 				i -= 1
 			else:
-				if addr != server.addr and addr not in chatbox:
-					comm = chat.Chatbox(addr[0] + ":" + str(addr[1]))
-					chatbox[socket_encoder.encode(*addr) + str(comm.id)] = comm
-					comm.players[addr] = name
+				i = socket_encoder.encode(*addr)
 
-					comm.update()
+				if addr != server.addr and i not in chatbox:
+					chatbox[i] = chat.Chatbox(addr[0] + ":" + str(addr[1]))
+					chatbox[i].players[addr] = name
+					chatbox[i].tag = "1" + code
+
+					chatbox[i].update()
 				break
 
 frame_player.on("mousebuttondown", player_mousebuttondown)
