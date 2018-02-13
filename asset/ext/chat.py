@@ -19,8 +19,6 @@ body_line = body.get_linesize()
 drag = None
 # Cache for chatboxes.
 cache = {}
-# Unique ID for each chatboxes.
-cache_id = 1
 # Text for the chatbox's textbox if empty.
 placeholder = "Type here."
 
@@ -61,7 +59,7 @@ class Chatbox:
 	def __init__(self, header, color=(255,255,255)):
 		global code
 
-		self.id = cache_id
+		self.tag = None
 		self.textbox = kouhai.TextBox({
 			"rect": (0, -40, 0, 40),
 			"scale_size": (1, 0),
@@ -119,11 +117,11 @@ class Chatbox:
 			if event.key == 13 or event.key == 271:
 				self.textbox.properties["text"] = ""
 
-				if len(text) > 0 and not text.isspace():
-					text = name " : " + text
+				if len(text) > 0 and not text.isspace() and self.tag:
+					text = name + " : " + text
 
-					self.broadcast("DATCHT" + self.id + code + "_" + text)
-					self.chat(text)
+					self.broadcast("DATCHT" + self.tag + "_" + text)
+					self.append(text)
 
 				text = ""
 
@@ -141,9 +139,9 @@ class Chatbox:
 
 		self.textbox.on("keyinput", keyinput)
 
+		# Cache
 		cache[self.frame] = self
-		cache_id += 1
-	def chat(self, v):
+	def append(self, v):
 		global body_line
 
 		self.chat.append(v)
@@ -191,7 +189,7 @@ class Chatbox:
 
 		for addr in self.players:
 			if addr != server.addr:
-				server.send(addr, text, True)
+				server.send(text, addr, True)
 
 	def clear(self, v):
 		self.surface_text = None
