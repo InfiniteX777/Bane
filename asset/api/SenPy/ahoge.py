@@ -137,9 +137,13 @@ class Stream:
 			try:
 				data, addr = self.sock.recvfrom(self.buffer)
 				data = data.decode("utf-8")
+				list = self.listener.copy()
 
-				for callback in self.listener:
-					callback(addr, data)
+				for callback in list:
+					try:
+						callback(data, addr)
+					except:
+						self.listener.remove(callback)
 			except:
 				pass
 
