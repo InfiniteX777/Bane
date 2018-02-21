@@ -100,8 +100,9 @@ def load(senpai):
 				elif event.type == pygame.KEYUP:
 					if key and key.key == event.key:
 						key, key_delay = None, None
-			
-			this.screen.fill(this.background)
+
+			if this.background:
+				this.screen.fill(this.background)
 
 			# cast a bright light here!
 			this.fire("update", dt)
