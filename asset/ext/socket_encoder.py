@@ -10,15 +10,15 @@ for i in range(26):
 	#index.insert(i+10, chr(i+65))
 	#index.insert(i+37, chr(i+97))
 
-def encode(ip, port):
+def encode(addr):
 	n = len(index)
 	v = "1"
 	res = ""
 
-	for k in re.split("\.", ip):
+	for k in re.split("\.", addr[0]):
 		v += ("000" + k)[-3:]
 
-	v = int(v + str(port))
+	v = int(v + str(addr[1]))
 
 	while v:
 		i = v%n
@@ -52,3 +52,8 @@ def decode(v):
 		return ip, int(res)
 	except:
 		pass
+
+b = encode(('127.0.0.1', 6000))
+print(b)
+b = decode(b)
+print(b)
