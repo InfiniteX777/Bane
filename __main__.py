@@ -17,7 +17,7 @@ imouto.background = (255, 255, 255)
 imouto.start(
 	120,
 	(800, 600),
-	pygame.HWSURFACE|pygame.DOUBLEBUF|pygame.RESIZABLE
+	pygame.HWSURFACE|pygame.DOUBLEBUF
 )
 
 # Ask for name.
