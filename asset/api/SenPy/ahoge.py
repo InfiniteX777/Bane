@@ -1,176 +1,289 @@
-''' Allows communication through the network.
+''' Networking Goddess.
 
-	.ip
-		Your IP.
+	TCP-based.
 
-	.stream(
-		ip[String],
-		port[Number],
-		buffer[Number]=1024
-	)
-		Creates and returns a 'stream_obj' that
-		connects to another address. Will return
-		an existing 'stream_obj' if there is
-		already one.
+	A portable server+client object 'Stream' that can only connect
+	with the same object, otherwise would cause complications.
 
-	stream_obj
-		A stream.
+	The system makes use of the newline character '\n' as a separator
+	between each data to segregate the streams.
 
-		.status=0
-			Current status of the stream.
-			-1 = Disconnected
-			0 = Pending
-			1 = Connected
+	Makes use of a pseudo-handshake system to finish name requests
+	and connection integrity.
 
-		.send(data[bString])
-			Sends data to the other end of the
-			stream.
+	.stream((ip, port))
+		Creates a server+client object 'Stream' that works both ways.
+		ALl incoming connections will use the server's address.
 
-		.on_recv(callback[Function(
-			data[bString]
-		)])
-			Creates a listener that fires
-			whenever data is received from the
-			other end. Returns a function that
-			when called will disconnect the
-			listener.
+		Functions
+			.on(channel, callback)
+				Creates a listener on the given channel.
+				Returns a 'Listener' object.
 
-		.close()
-			Closes the stream.
+				listener.disconnect()
+					Disconnects the listener.
+
+					Example;
+						def connect(addr):
+							print(addr)
+
+						listener = stream.on("connected", connect)
+						listener.disconnect()
+
+				Example;
+					def connect(addr):
+						print(addr)
+
+					stream.on("connected", connect)
+
+			.send(data)
+				Sends a stream of data. Automatically converts
+				the data to a binary string.
+
+				Example;
+					stream.send("hello")
+
+			.close()
+				Closes the stream.
+
+		Events
+			"connected", (address)
+				Fires when a client has connected to your server.
+				The address is the client's server address (note
+				that the client uses a new address to connect to
+				you, which is not their server.)
+
+			"success", (address)
+				Fires when you have successfully connected to
+				a server.
+
+			"received", (address, data)
+				Fires when a data is received from the clients.
+				The data is automatically decoded to a regular
+				string.
+
+			"timeout", (address)
+				Fires when a connection attempt has timed-out, which
+				is done after 5 seconds of not receiving confirmation.
+				The address is the one that you are trying to
+				connect to.
+
+			"failed", (address)
+				Fires when a connection is explicitly disconnected
+				before the pseudo-handshake system. This happens
+				when a similar connection is already established.
+				The address is the one that you are trying to connect
+				to.
+
+			"disconnected", (address)
+				Fires when the client has disconnected. The address
+				is the one that you are trying to connect to.
+
+			"closed", ()
+				Fires when the server is closed (stream.close()
+				was called).
 
 	.close_all()
-		Closes all existing streams.
-
-	.broadcast(data[bString])
-		Sends data to all existing streams.
-
-	.on_recv(
-		callback[Function(
-			sock[socket],
-			addr[(ip[String], port[Number])],
-			data[bString]
-		)],
-		*tuple[
-			(ip[String], port[Number])
-		]
-	)
-		Creates a listener that fires whenever
-		data is received from the given
-		addresses. If there are no provided
-		addresses, it will fire from any
-		data received.
-
-	.server_start(
-		ip[String],
-		port[Number]
-	)
-		Starts the server and binds to the given
-		address.
+		Closes all streams (calls the stream.close() on each stream).
 '''
 
-import socket
-import _thread as thread
+import socket, time, threading, re
 
-# Globals
-
-cache_stream = {}
-cache_client = {
-	"all": [] # Listener for all connections.
-}
-
-# Private
-
-class Stream:
-	def __init__(self, ip, port, buffer=1024):
-		# Init
-		self.listener = []
-
-		self.buffer = buffer
-		self.sock = socket.socket(
-			socket.AF_INET,
-			socket.SOCK_DGRAM
-		)
-
-		# Setup socket.
-		self.sock.bind((ip, port))
-		# Get the socket's name.
-		self.addr = self.sock.getsockname()
-		# Set status.
-		self.status = 1
-
-		cache_stream[self.addr] = self
-
-		# Start thread.
-		thread.start_new_thread(self._recv_loop, ())
-
-	def send(self, data, addr, persist=False):
-		persist = persist and -1 or 1
-
-		while persist != 0:
-			try:
-				self.sock.sendto(
-					data.encode('utf-8'),
-					addr
-				)
-
-				persist = 0
-			except:
-				print(persist)
-				persist -= 1
-
-	def on_recv(self, callback):
-		self.listener.append(callback)
-
-		def disconnect():
-			self.listener.remove(callback)
-
-		return disconnect
-
-	def close(self):
-		self.status = -1
-		cache_stream.pop(self.addr, None)
-		self.sock.close()
-
-	# Receive data from the target.
-	def _recv_loop(self):
-		while self.status == 1:
-			try:
-				data, addr = self.sock.recvfrom(self.buffer)
-				data = data.decode("utf-8")
-				list = self.listener.copy()
-
-				for callback in list:
-					try:
-						callback(data, addr)
-					except:
-						self.listener.remove(callback)
-			except:
-				pass
-
-class this:
-	ip = socket.gethostbyname(socket.gethostname())
-
-	def stream(ip, port, buffer=1024):
-		if (ip, port) in cache_stream:
-			# Return the existing stream.
-			return cache_stream[(ip, port)]
-		else:
-			# Create a new stream.
-			return Stream(ip, port, buffer)
-
-	def close_all():
-		global cache_stream
-
-		# Create a copy since closing streams also updates the dict.
-		list = cache_stream.copy()
-
-		# Close everything.
-		for addr in list:
-			cache_stream[addr].close()
-
-		# Make a fresh list.
-		cache_stream = {}
+cache = {}
+buffer = 1024
+timeout = 5
 
 def load(senpai):
+	moe = senpai.remote["moe"]
+
+	class Stream:
+		def __init__(self, sock):
+			# Init
+			status = 1
+			self.on, fire = moe()
+			clients = {}
+			queue = []
+
+			self.addr = sock.getsockname()
+
+			# Server Loop
+
+			def recv(conn, addr, reply):
+				def callback():
+					nonlocal reply
+
+					if reply:
+						reply = -1
+						conn.close()
+
+				threading.Timer(timeout, callback).start()
+
+				while status and reply > -1:
+					try:
+						data = conn.recv(buffer).decode("utf-8")[:-1]
+						print("received", data, len(data))
+
+						for data in re.split("\n", data):
+							if len(data) == 0:
+								conn.close()
+
+								break # Stop the loop.
+							elif reply:
+								if reply == 2:
+									i = data.index(":")
+									addr = (data[:i], int(data[i+1:]))
+
+									if addr in clients:
+										conn.close()
+
+										break # Already connected.
+
+									clients[addr] = conn
+
+									fire("connected", addr)
+									print("connected", addr, data)
+								else:
+									conn.send((
+										self.addr[0] + ":" +
+										str(self.addr[1]) + "\n"
+									).encode("utf-8"))
+
+									fire("success", addr)
+									print("success", addr)
+
+								reply = 0
+							else:
+								fire("received", addr, data)
+					except:
+						break
+
+				if reply == -1:
+					print("timeout", addr)
+					fire("timeout", addr)
+				elif reply:
+					print("failed", addr)
+					fire("failed", addr)
+				else:
+					del clients[addr]
+
+					print("disconnected", addr)
+					fire("disconnected", addr)
+
+				conn.close()
+
+			def accept():
+				while status:
+					try:
+						conn, addr = sock.accept()
+
+						threading.Thread(
+							target=recv,
+							args=(conn, addr, 2)
+						).start()
+
+						conn.send(b' \n') # Send confirmation.
+					except:
+						break
+
+				print("closed")
+				fire("closed")
+
+			threading.Thread(target=accept).start()
+
+			# Receiver Loop
+
+			def connect(addr):
+				if addr in clients or addr == self.addr:
+					print("connection to", addr, "already exists.")
+					return True
+
+				print("connecting to", addr)
+
+				try:
+					conn = socket.socket(
+						socket.AF_INET,
+						socket.SOCK_STREAM
+					)
+					clients[addr] = conn
+
+					conn.connect(addr)
+					threading.Thread(
+						target=recv,
+						args=(conn, addr, 1)
+					).start()
+
+					return True
+				except:
+					return False
+
+			def disconnect(addr):
+				if addr in clients:
+					clients[addr].close()
+
+			def send(data, addr=None):
+				if not addr:
+					for addr in clients:
+						send(data, addr)
+
+					return True
+
+				if addr in clients:
+					conn = clients[addr]
+					data = type(data) != bytes and data.encode("utf-8") or data
+					data += b'\n'
+
+					print("send", data)
+					conn.send(data)
+
+				return False
+
+			def close():
+				nonlocal status
+				status = 0
+
+				for addr in clients.copy():
+					clients[addr].close()
+
+				sock.close()
+
+			self.send = send
+			self.connect = connect
+			self.disconnect = disconnect
+			self.close = close
+
+	class this:
+		ip = socket.gethostbyname(socket.gethostname())
+
+		def stream(addr):
+			global cache
+
+			if addr not in cache or addr[1] == 0:
+				sock = socket.socket(
+					socket.AF_INET,
+					socket.SOCK_STREAM
+				)
+
+				sock.bind(addr)
+				sock.listen(5)
+
+				addr = sock.getsockname()
+				cache[addr] = Stream(sock)
+
+			return cache[addr]
+
+		def close_all():
+			global cache
+
+			# Create a copy since closing streams also updates the list.
+			list = cache.copy()
+
+			# Close everything.
+			for addr in list:
+				cache[addr].close()
+
+			# Make a fresh list.
+			cache = {}
+
+	this.Stream = Stream
 
 	return this
