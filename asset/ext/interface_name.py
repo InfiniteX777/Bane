@@ -25,7 +25,7 @@ def keyinput(event):
 	if event and (event.key == 13 or event.key == 271):
 		name = textbox.properties["text"]
 
-		if not name.isspace():
+		if not name.isspace() and len(name) > 0:
 			textbox.destroy()
 			keyinput_listener.disconnect()
 			update_listener.disconnect()
