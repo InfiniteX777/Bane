@@ -2,12 +2,13 @@
 A chat room with sprinkles.
 
 # Features
-* Each user has their own server and other people can connect to them!
-  * You can ask for their 'Invite Code' (a compressed socket) to connect with them.
-  * All users connected can communicate in a server-specific chat room.
+* All users will connect to each other automatically.
+  * Start a server by asking someone's 'Invite Code' (a compressed socket) and type '/invite [Invite Code]'.
+  * All users who connect to one of you will connect with the rest of the users who are connected with you.
+  * All connected users can communicate via the 'Global' chat room.
+
 * Private chat ahoy!
   * Chat privately with a single user within a server.
-  * This is a user-specific chat, and chatting with the same user in another server gives you the same chat room.
 
 # To-Do
 * Make queueing system.
