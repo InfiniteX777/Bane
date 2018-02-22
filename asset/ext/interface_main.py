@@ -70,6 +70,51 @@ img_highlight = pygame.image.load("asset/img/highlight.png")
 placeholder = "[Invite Code Here]"
 imouto.background = None
 
+
+# Update
+
+def update():
+	imouto.screen.blit(img_bg, (0, 0))
+
+	imouto.screen.blit(
+		surface_info,
+		(0, 0)
+	)
+
+	imouto.screen.blit(
+		chat_surface,
+		(210, 570)
+	)
+
+	if room_surface:
+		imouto.screen.blit(
+			room_surface,
+			(0, 270)
+		)
+
+	v = rooms[selected_room]
+
+	if v.player_surface:
+		imouto.screen.blit(
+			v.player_surface,
+			(600, 0)
+		)
+
+	if v.chat_surface:
+		if v.chat_scroll_delta != v.chat_scroll:
+			v.chat_scroll_delta = math.ceil((
+				v.chat_scroll_delta +
+				v.chat_scroll
+			)/2)
+
+		imouto.screen.blit(
+			v.chat_surface,
+			(210,
+			10 + max(0, 570 - v.chat_surface.get_rect().height)),
+			(0, v.chat_scroll_delta, 380, 560)
+		)
+
+
 # Server
 
 def success(addr):
@@ -102,6 +147,8 @@ def disconnected(addr):
 		rooms[k].rem(addr)
 		rooms[k].update()
 
+	update()
+
 server.on("disconnected", disconnected)
 
 def received(addr, data):
@@ -119,6 +166,13 @@ def received(addr, data):
 
 		if i in rooms:
 			rooms[i].chat(text)
+
+			if not rooms[i].visible:
+				rooms[i].visible = True
+
+				room_update()
+
+			update()
 	elif i == "1": # Data Player
 		sep = data.index("_")
 		i = data[:sep]
@@ -146,6 +200,7 @@ def received(addr, data):
 					rooms[i].chat("connected with '" + n + "'.")
 
 		rooms[i].update()
+		update()
 	elif i == "2": # Data Disconnect
 		pass
 	elif i == "3": # Data Room
@@ -231,7 +286,9 @@ def player_mousebuttondown(event):
 	if addr2 and addr2 != server.addr:
 		i = "0"+socket_encoder.encode(addr2)
 
-		if i not in rooms:
+		if i in rooms:
+			rooms[i].visible = not rooms[i].visible
+		else:
 			rooms[i] = room.Room(i, name2)
 			rooms[i].add(server.addr, name)
 			rooms[i].add(addr2, name2)
@@ -301,6 +358,8 @@ def room_update():
 
 			i += 1
 
+	update()
+
 
 ## Chatbox
 
@@ -326,6 +385,8 @@ def chat_mousebuttondown(event):
 			rooms[selected_room].chat_scroll + body_line*delta,
 			rect.height - 570
 		))
+
+		update()
 
 chat_frame.on("mousebuttondown", chat_mousebuttondown)
 
@@ -373,6 +434,7 @@ def chat_keyinput(event):
 		d and (191, 191, 191) or (127, 127, 127),
 		align=(0, 0.5)
 	)
+	update()
 
 chat_keyinput(None)
 chat_textbox.on("keyinput", chat_keyinput)
@@ -385,47 +447,4 @@ def quit(event):
 
 imouto.on("quit", quit)
 
-# Add to update list.
-
-def update(event):
-	imouto.screen.blit(img_bg, (0, 0))
-
-	imouto.screen.blit(
-		surface_info,
-		(0, 0)
-	)
-
-	imouto.screen.blit(
-		chat_surface,
-		(210, 570)
-	)
-
-	if room_surface:
-		imouto.screen.blit(
-			room_surface,
-			(0, 270)
-		)
-
-	v = rooms[selected_room]
-
-	if v.player_surface:
-		imouto.screen.blit(
-			v.player_surface,
-			(600, 0)
-		)
-
-	if v.chat_surface:
-		if v.chat_scroll_delta != v.chat_scroll:
-			v.chat_scroll_delta = math.ceil((
-				v.chat_scroll_delta +
-				v.chat_scroll
-			)/2)
-
-		imouto.screen.blit(
-			v.chat_surface,
-			(210,
-			10 + max(0, 570 - v.chat_surface.get_rect().height)),
-			(0, v.chat_scroll_delta, 380, 560)
-		)
-
-imouto.on("update", update)
+update()
