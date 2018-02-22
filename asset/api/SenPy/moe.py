@@ -1,40 +1,28 @@
 ''' A moe event handler.
 
-	event()
+	moe()
 		Returns 2 functions. 1st one handles the
 		listener creation, while the 2nd one
 		fires the listeners with the given
 		channel.
 
-		on(
-			channel[String],
-			callback[Function(
-				arg[Tuple]
-			)],
-			volatile[Boolean]=False
+		.on(
+			channel,
+			callback,
+			volatile=False
 		)
 			Creates a 'Listener' object that
 			can be disconnected. If volatile is
 			set to True, it will automatically
 			disconnect after being fired once.
 
-			Listener(
-				event[Dictionary],
-				channel[String],
-				callback[Function(
-					arg[Tuple]
-				)],
-				volatile[Boolean]=False
-			)
-				A 'Listener' object.
+			.disconnect()
+				Disconnects from the
+				event.
 
-				.disconnect()
-					Disconnects from the
-					event.
-
-		fire(
-			channel[String],
-			arg[Tuple]
+		.fire(
+			channel,
+			arg
 		)
 			Executes all listeners from the
 			channel with the given arguments.

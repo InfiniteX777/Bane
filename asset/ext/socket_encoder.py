@@ -1,3 +1,12 @@
+''' Shortens socket addresses.
+
+	.encode(address)
+		Encodes the address.
+
+	.decode(v)
+		Decodes the given string and returns the address. Returns
+		'None' if invalid format.
+'''
 import re
 
 index = []

@@ -1,3 +1,36 @@
+''' Room creation.
+
+	.set_server(server)
+		Sets the server.
+
+	.Room(room, name="Untitled Room")
+		Creates a room with the given room id and name.
+
+		.broadcast(data)
+			Broadcasts the data to all the addresses in the room.
+
+		.chat(data)
+			Adds text to the room's surface. Does not broadcast.
+
+		.get(i)
+			If i is an address, will return the name assigned to the
+			address. If i is an integer, will return both the
+			address and its assigned name.
+
+		.has(address)
+			Checks if the address is in the room.
+
+		.add(address, name)
+			Attempts to add the address and its assigned name in the
+			room. Does not update the address' assigned name if
+			re-added.
+
+		.rem(address)
+			Removes the address if it's inside the room.
+
+		.update()
+			Updates the room, specifically the player surface.
+'''
 import asset.ext.socket_encoder as socket_encoder
 import pygame
 

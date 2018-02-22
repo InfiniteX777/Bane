@@ -1,3 +1,5 @@
+''' The interface for the name request.
+'''
 import pygame
 
 import asset.api.SenPy as senpai

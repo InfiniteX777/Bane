@@ -1,4 +1,45 @@
-''' Kawaii game interface.
+''' This game interface can't be this cute.
+
+	clock
+		The game's clock. Can be used to monitor
+		FPS and delay between frames.
+
+	fps
+		The maximum FPS. 0 will remove limit.
+
+	size
+		Size of the screen, represented by a
+		tuple with 2 values.
+
+	width
+		Width of the screen.
+
+	height
+		Height of the screen.
+
+	flag
+		The screen's flags. See pygame.Display
+		for more details.
+
+	background
+		The background color of the screen.
+		Alpha color does not work. Setting to
+		'None' will stop 'clearing' the screen
+		on every .update().
+
+	rect
+		The size of the screen in 'Rect' object.
+
+	.start(fps, size, flag)
+		Starts the game. This should be initiated
+		first before doing anything.
+
+	.resize(x, y)
+		Resizes the screen.
+
+	.update()
+		Updates the screen. Should be called in
+		a constant loop.
 '''
 
 import sys, pygame, time, importlib
@@ -29,19 +70,12 @@ def load(senpai):
 	moe = senpai.remote["moe"]
 
 	class this:
-		# Game clock.
 		clock = pygame.time.Clock()
-		# 0 = No limit. FPS = 0 to 999...
 		fps = 0
-		# Screen size.
 		size = width, height = 320, 240
-		# Screen rendering options.
 		flag = 0
-		# Background color.
 		background = 0, 0 ,0
-		# Screen.
 		screen = None
-		# Rect.
 		rect = None
 
 		on, fire = moe()

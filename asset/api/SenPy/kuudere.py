@@ -1,4 +1,39 @@
-''' A font manager.
+''' A cool-headed font manager.
+
+	.get(name, size, bold=False, italic=False)
+		Returns a 'Font' object with the given parameters. Will
+		store in a cache and will return the same object when
+		called again.
+
+	.draw(
+		surface,
+		font,
+		rect,
+		text="",
+		antialias=0,
+		color=(0, 0, 0),
+		background=None,
+		align=(0, 0)
+	)
+		Draws the given font and its paremeters on a surface. See
+		pygame.Font for more details.
+
+	.wrap(
+		font,
+		rect,
+		linesize,
+		text="",
+		antialias=0,
+		color=(0, 0, 0),
+		background=None
+	)
+		Creates a list of 'Image' surface objects wrapped with the
+		given 'rect' argument. If rect's height is 0, will only
+		restrict the width.
+
+	.flush()
+		Clears the font cache, allowing new 'Font' objects with
+		similar parameters to be created.
 '''
 import pygame
 

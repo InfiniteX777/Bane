@@ -1,4 +1,4 @@
-''' A frame.
+''' A FRAME FOR YOUR SENPAI!@&!#!112
 '''
 
 import pygame

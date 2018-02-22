@@ -1,4 +1,4 @@
-''' Data
+''' Variables
 		addr = The address.
 			('127.0.0.1', 6000)
 
@@ -6,9 +6,8 @@
 			('127.0.0.1', 6000) = 32yvqix8dc0
 
 		id = A unique number given to a room.
-			0 = Server=Specific Room
-			1 = 2-User Room
-			2~= Multi-User Room
+			0 = 2-User Room
+			1~= Multi-User Room
 
 		room = A combination of a unique ID number and a code.
 			id = 1; addr = ('127.0.0.1', 6000) = 32yvqix8dc0
@@ -24,16 +23,19 @@
 
 	Data Protocol
 		0[name]_[addr]
-			A chat message to be added in a room.
+			A chat message to be added in a room. Does nothing
+			if the room doesn't exist.
 
 		1[room]_[addr1]:[name1]_[addr2]:[name2]...
-			A list of players to be added to a room.
+			A list of players to be added to a room. This will also
+			creates a room if it doesn't exist.
 
 		2[room]_[addr1]:[name1]_[addr2]:[name2]...
-			A list of players to be removed from a room.
+			A list of players to be removed from a room. Does nothing
+			if the room doesn't exist.
 
 		3[room]_[name]
-			A chat message to be added in a room.
+			A request to create a room with the specified id and name.
 '''
 import pygame, re, math
 import asset.ext.socket_encoder as socket_encoder
