@@ -16,3 +16,9 @@ A chat room with sprinkles.
 * Allow people to challenge each other.
 * Allow the game master to make their own rules.
 * Multi-user private chat room.
+
+# Bugs
+* Sockets not properly being closed.
+  * Possible fix it to make a connection test before finally setting the socket as the server.
+* Users randomly crashing when attempting to connect to a server with more than 1 user.
+  * Possibly a loop error with the ahoge.py persistent sender.
