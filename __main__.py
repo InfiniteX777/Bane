@@ -8,7 +8,7 @@ import asset.api.SenPy as senpai
 imouto = senpai.remote["imouto"]
 
 # Make imouto pretty.
-imouto.background = (255, 255, 255)
+imouto.background = None
 
 # Start the game.
 imouto.start(
