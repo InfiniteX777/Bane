@@ -32,7 +32,7 @@ def encode(addr):
 	while v:
 		i = v%n
 		res = str(index[i]) + res
-		v = int(v/n)
+		v = v//n
 
 	return res
 
@@ -61,8 +61,3 @@ def decode(v):
 		return ip, int(res)
 	except:
 		pass
-
-b = encode(('127.0.0.1', 6000))
-print(b)
-b = decode(b)
-print(b)
