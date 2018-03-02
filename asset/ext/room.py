@@ -118,14 +118,14 @@ class Room:
 
 		def add(addr, name):
 			if addr not in players:
-				self.players += "_" + socket_encoder.encode(addr) + ":" + name
+				self.players += "\\" + socket_encoder.encode(addr) + "\\" + name
 
 				players[addr] = name
 
 		def rem(addr):
 			if addr in players:
 				tag = socket_encoder.encode(addr)
-				n = "_" + tag + ":" + players[addr]
+				n = "\\" + tag + "\\" + players[addr]
 				i = self.players.find(n)
 				self.players = self.players[:i] + self.players[i+len(n):]
 
@@ -159,6 +159,8 @@ class Room:
 
 				i += 1
 
+		self.password = None
+		self.public = 1
 		self.name = name
 		self.players = ""
 		self.visible = 1
