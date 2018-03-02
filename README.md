@@ -26,4 +26,3 @@ A chat room with sprinkles.
 * Add the game.
 * Allow people to challenge each other.
 * Allow the game master to make their own rules.
-* Multi-user private chat room.
