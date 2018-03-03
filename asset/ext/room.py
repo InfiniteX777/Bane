@@ -160,7 +160,6 @@ class Room:
 				i += 1
 
 		self.password = None
-		self.public = 1
 		self.name = name
 		self.players = ""
 		self.visible = 1
