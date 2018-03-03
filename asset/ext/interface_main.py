@@ -34,13 +34,10 @@
 			A list of players to be removed from a room. Does nothing
 			if the room doesn't exist.
 
-		3[room]
-			A confirmation for joining a private room.
-
-		3[room]\[name]
+		3[room1]\[name1]\[room2]\[name2]...
 			A request to create a room with the specified id and name.
 
-		3[room]\[name]\[password]
+		4[room]\[password]
 			A request to join a private room. [name] is the
 			requester's name.
 '''
@@ -82,7 +79,7 @@ placeholder = "[Invite Code Here]"
 
 # Update
 
-def update():
+def draw():
 	imouto.screen.blit(img_bg, (0, 0))
 
 	imouto.screen.blit(
@@ -156,7 +153,7 @@ def disconnected(addr):
 		rooms[k].rem(addr)
 		rooms[k].update()
 
-	update()
+	draw()
 
 server.on("disconnected", disconnected)
 
@@ -181,7 +178,7 @@ def received(addr, data):
 
 				room_update()
 
-			update()
+			draw()
 	elif i == "1": # Data Player
 		sep = data.index("\\")
 		i = data[:sep]
@@ -195,57 +192,83 @@ def received(addr, data):
 		target = None
 		for v in data[sep+1:].split("\\"):
 			if target:
-				if not rooms[i].has(target):
-					rooms[i].add(target, v)
+				if not rooms["global"].has(target):
+					server.connect(target)
 
-				server.connect(target)
+				rooms[i].add(target, v)
 
 				if i == "global":
 					rooms[i].chat("connected with '" + v + "'.")
 
 				target = None
+			elif target == None:
+				v = socket_encoder.decode(v)
+
+				if rooms[i].has(v):
+					target = 0
+				else:
+					target = v
 			else:
-				target = socket_encoder.decode(v)
+				target = None
 
 		rooms[i].update()
 		room_update()
-		update()
+		draw()
 	elif i == "2": # Data Disconnect
 		pass
 	elif i == "3": # Data Room
-		if "\\" in data:
-			# A room creation request.
-			sep = data.index("\\")
-			i = data[:sep]
-			data = data[sep+1:]
+		# A room creation request.
+		sep = data.index("\\")
 
-			if i in rooms:
-				if "\\" in data:
-					# A join request.
-					# Name will become the requester's name.
-					sep = data.index("\\")
-					n = data[:sep]
-					data = data[sep+1:]
-
-					if rooms[i].password == data:
-						# Tell everybody a user connected.
-						rooms[i].broadcast(
-							"1" + i + "\\" +
-							socket_encoder.encode(addr) + "\\" + n
-						)
-						rooms[i].add(addr, n) # Add the guy.
-						server.send("3" + i) # Send confirmation.
+		i = None
+		for v in data.split("\\"):
+			if i:
+				print("adding room", i, v)
+				rooms[i] = room.Room(i, v)
+				i = None
+			elif i == None:
+				if v in rooms:
+					i = 0
 				else:
-					# Change the room's name.
-					rooms[i].name = data
+					i = v
 			else:
-				# Doesn't exist. Create room.
-				rooms[i] = room.Room(i, data)
+				i = None
 
-			room_update()
-		elif data in rooms:
-			# A room join confirmation.
-			rooms[data].add(server.addr, name)
+		room_update()
+	elif i == "4": # Data Password
+		sep = data.index("\\")
+		i = data[:sep]
+		data = data[sep+1:]
+
+		if i in rooms:
+			if rooms[i].has(addr):
+				# Update password.
+				rooms[i].password = data or None
+			elif not rooms[i].password or rooms[i].password == data:
+				# Someone wants to join.
+				id = socket_encoder.encode(addr)
+				v = rooms["global"].get(addr)
+
+				# Add him.
+				rooms[i].add(addr, v)
+				# Give him the full player list.
+				server.send(
+					"1" + i + rooms[i].players,
+					addr
+				)
+				# Tell him that the password was correct.
+				server.send(
+					"4" + i + "\\" + (rooms[i].password or "")
+				)
+				# Tell everybody a new user joined.
+				rooms[i].broadcast(
+					"1" + i + "\\" + id + "\\" + v
+				)
+				rooms[i].broadcast(
+					"0" + i + "\\'" + v + "' has joined."
+				)
+				rooms[i].chat("'" + v + "' has joined.")
+				rooms[i].update()
 
 server.on("received", received)
 
@@ -347,18 +370,20 @@ def room_mousebuttondown(event):
 	global rooms, selected_room
 
 	i = int((event.pos[1] - 270)/30) + room_scroll
+	print(i, len(rooms))
 
 	if i < len(rooms):
 		n = 0
 		# Find the room with the corresponding index.
 		for k in rooms:
-			if i == n:
-				selected_room = k
-				break
+			if rooms[k].visible and len(rooms[k].players) > 0:
+				if i == n:
+					selected_room = k
+					print("selected room", k)
+					room_update()
+					break
 
-			n += 1
-
-		room_update()
+				n += 1
 
 room_frame.on("mousebuttondown", room_mousebuttondown)
 
@@ -372,7 +397,7 @@ def room_update():
 
 	i = 0
 	for k in rooms:
-		if rooms[k].visible:
+		if rooms[k].visible and len(rooms[k].players) > 0:
 			if selected_room == k:
 				room_surface.blit(
 					img_highlight,
@@ -396,7 +421,7 @@ def room_update():
 
 			i += 1
 
-	update()
+	draw()
 
 
 ## Chatbox
@@ -424,7 +449,7 @@ def chat_mousebuttondown(event):
 			rect.height - 570
 		))
 
-		update()
+		draw()
 
 chat_frame.on("mousebuttondown", chat_mousebuttondown)
 
@@ -469,7 +494,8 @@ def chat_keyinput(event):
 							# Send him the player list and room name.
 							server.send(
 								"3" + selected_room + "\\" +
-								rooms[selected_room].name
+								rooms[selected_room].name,
+								addr
 							)
 							server.send(
 								"1" + selected_room +
@@ -502,11 +528,46 @@ def chat_keyinput(event):
 					"There seems to be something wrong " +
 					"with your invite code..."
 				)
+		elif text[:5] == "/join":
+			# Send a request to join a public room.
+			if not rooms[selected_room].has(server.addr):
+				rooms[selected_room].broadcast(
+					"4" + selected_room + "\\" + text[6:]
+				)
+			else:
+				rooms[selected_room].chat(
+					"You're already in this room!"
+				)
 		elif text[:8] == "/public ":
 			# Host a public room. Everybody can see this room but
 			# cannot see the chat. They have to join the room
 			# with the right password to see it.
-			pass
+			text = text[8:]
+			pw = None
+
+			if " " in text:
+				# A password was provided.
+				sep = text.index(" ")
+				pw = text[sep+1:] or None
+				text = text[:sep]
+
+			if len(text) > 0 and "\\" not in text and (not pw or (" " not in pw and "\\" not in pw)):
+				id = str(room_id) + code
+				rooms[id] = room.Room(id, text)
+				rooms[id].password = pw
+
+				rooms[id].add(server.addr, name)
+				rooms[id].update()
+				room_update()
+
+				# Broadcast the room id and the player.
+				server.send("3" + id + "\\" + text)
+				server.send(
+					"1" + id + "\\" +
+					code + "\\" + name
+				)
+
+				room_id += 1
 		elif text[:9] == "/private ":
 			# Host a private room. Only the users connected to
 			# it can see the room.
@@ -519,6 +580,10 @@ def chat_keyinput(event):
 				rooms[id].add(server.addr, name)
 				rooms[id].update()
 				room_update()
+
+				# Broadcast the room id, but not the
+				# player list.
+				server.send("3" + id + "\\" + text)
 
 				room_id += 1
 		else:
@@ -543,7 +608,7 @@ def chat_keyinput(event):
 		d and (191, 191, 191) or (127, 127, 127),
 		align=(0, 0.5)
 	)
-	update()
+	draw()
 
 chat_keyinput(None)
 chat_textbox.on("keyinput", chat_keyinput)
@@ -556,4 +621,4 @@ def quit(event):
 
 imouto.on("quit", quit)
 
-update()
+draw()
