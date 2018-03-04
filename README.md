@@ -18,6 +18,10 @@ A chat room with sprinkles.
   * Invite a buddy via '/invite [Invite Code]'.
   * Only you and your buddies can see the room.
 
+* Send files!
+  * Just type '/send' in a room and a file chooser dialog will appear.
+  * Everybody in that room will receive the file.
+
 * Need help?
   * Type '/help' or '/commands' to see what you can do in the app!
 
