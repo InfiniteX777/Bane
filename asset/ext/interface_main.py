@@ -40,10 +40,18 @@
 		4[room]\[password]
 			A request to join a private room. [name] is the
 			requester's name.
+
+		5[name]\[file]
+			A file transfered. The name also includes the
+			extension.
 '''
-import pygame, re, math
+import pygame, re, math, tkinter, os
 import asset.ext.socket_encoder as socket_encoder
 import asset.ext.room as room
+from tkinter import filedialog
+
+# Hide tkinter window.
+tkinter.Tk().withdraw()
 
 import asset.api.SenPy as senpai
 ahoge = senpai.remote["ahoge"]
@@ -159,8 +167,12 @@ server.on("disconnected", disconnected)
 
 def received(addr, data):
 	global name, code
-	i = data[:1]
+	i = data[:1].decode("utf-8")
 	data = data[1:]
+	print("recv", data)
+
+	if i != "5":
+		data = data.decode("utf-8")
 
 	if i == "0": # Data Chat
 		sep = data.index("\\")
@@ -218,21 +230,20 @@ def received(addr, data):
 		pass
 	elif i == "3": # Data Room
 		# A room creation request.
-		sep = data.index("\\")
-
 		i = None
 		for v in data.split("\\"):
 			if i:
-				print("adding room", i, v)
-				rooms[i] = room.Room(i, v)
-				i = None
-			elif i == None:
-				if v in rooms:
-					i = 0
+				if i in rooms:
+					rooms[i].name = v
 				else:
-					i = v
-			else:
+					rooms[i] = room.Room(i, v)
+
 				i = None
+			else:
+				if v[0] == "0":
+					v = "0" + socket_encoder.encode(addr)
+
+				i = v
 
 		room_update()
 	elif i == "4": # Data Password
@@ -269,6 +280,17 @@ def received(addr, data):
 				)
 				rooms[i].chat("'" + v + "' has joined.")
 				rooms[i].update()
+	elif i == "5": # Data File
+		sep = data.index(b"\\")
+		i = data[:sep].decode("utf-8")
+		data = data[sep+1:]
+
+		if not os.path.exists("download"):
+			os.makedirs("download")
+
+		file = open("download\\" + i, "wb")
+		file.write(data)
+		file.close()
 
 server.on("received", received)
 
@@ -370,7 +392,6 @@ def room_mousebuttondown(event):
 	global rooms, selected_room
 
 	i = int((event.pos[1] - 270)/30) + room_scroll
-	print(i, len(rooms))
 
 	if i < len(rooms):
 		n = 0
@@ -379,7 +400,6 @@ def room_mousebuttondown(event):
 			if rooms[k].visible and len(rooms[k].players) > 0:
 				if i == n:
 					selected_room = k
-					print("selected room", k)
 					room_update()
 					break
 
@@ -586,6 +606,29 @@ def chat_keyinput(event):
 				server.send("3" + id + "\\" + text)
 
 				room_id += 1
+		elif text[:5] == "/send":
+			# Make the user select a file.
+			file = filedialog.askopenfile()
+
+			if file:
+				# Get the path.
+				i = file.name
+
+				# Close that file.
+				file.close()
+
+				# Read it again, but in binary.
+				file = open(i, "rb")
+
+				# Send a broadcast across the room.
+				rooms[selected_room].broadcast(
+					b"5" +
+					os.path.basename(file.name).encode("utf-8") +
+					b"\\" + file.read()
+				)
+
+				# Close it.
+				file.close()
 		else:
 			# Chat in your selected room.
 			text = name + " : " + text
