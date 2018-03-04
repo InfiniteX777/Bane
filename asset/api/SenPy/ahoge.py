@@ -5,7 +5,7 @@
 	A portable server+client object 'Stream' that can only connect
 	with the same object, otherwise would cause complications.
 
-	The system makes use of the newline character '\n' as a separator
+	The system makes use of the 10000-byte character as a separator
 	between each data to segregate the streams.
 
 	Makes use of a pseudo-handshake system to finish name requests
@@ -87,17 +87,17 @@
 		Closes all streams (calls the stream.close() on each stream).
 '''
 
-import socket, time, threading, re
+import socket, time, threading, re, math
 
 cache = {}
-buffer = 1024
 timeout = 5
+eos = chr(10000).encode("utf-8") # End of stream.
 
 def load(senpai):
 	moe = senpai.remote["moe"]
 
 	class Stream:
-		def __init__(self, sock):
+		def __init__(self, sock, buffer=1024):
 			# Init
 			status = 1
 			self.on, fire = moe()
@@ -118,55 +118,132 @@ def load(senpai):
 
 				threading.Timer(timeout, callback).start()
 
+				data = b""
 				while status and reply > -1:
 					try:
-						data = conn.recv(buffer).decode("utf-8")[:-1]
-						print("received", data, len(data))
+						i = conn.recv(1)
 
-						for data in re.split("\n", data):
-							if len(data) == 0:
-								conn.close()
+						if not i:
+							# Received an empty data.
+							# Connection closed.
+							conn.close()
+							break # Stop the loop.
 
-								break # Stop the loop.
-							elif reply:
+						data += i
+
+						if eos in data:
+							# Received a newline character.
+							# End of stream.
+							data = data[:-3]
+
+							if reply:
+								# Handshake first.
 								if reply == 2:
+									# Server-side.
+									data = data.decode("utf-8")
 									i = data.index(":")
 									addr = (data[:i], int(data[i+1:]))
 
 									if addr in clients:
 										conn.close()
+										break # Already connected
 
-										break # Already connected.
+									clients[addr] = {
+										"conn": conn,
+										"data": {},
+										"header": None,
+										"lo": [],
+										"hi": 0
+									}
 
-									clients[addr] = conn
-
-									fire("connected", addr)
-									print("connected", addr, data)
+									threading.Thread(
+										target=fire,
+										args=("connected", addr)
+									).start()
+									print(
+										"ahoge.py > Connection",
+										"\nTarget:", addr,
+										"\nEcho:", data,
+										"\n"
+									)
 								else:
+									# Client-side.
 									conn.send((
 										self.addr[0] + ":" +
-										str(self.addr[1]) + "\n"
-									).encode("utf-8"))
+										str(self.addr[1])
+									).encode("utf-8") + eos)
 
-									fire("success", addr)
-									print("success", addr)
+									threading.Thread(
+										target=fire,
+										args=("success", addr)
+									).start()
+									print(
+										"ahoge.py > Success",
+										"\nTarget:", addr,
+										"\n"
+									)
 
 								reply = 0
+								data = b""
 							else:
-								fire("received", addr, data)
+								# Data received.
+								print(
+									"ahoge.py > Receiving",
+									"\nTarget:", addr,
+									"\nPayload:", len(data)
+								)
+
+								if clients[addr]["header"]:
+									# Receiving data.
+									print("Type: Data\n")
+
+									header = clients[addr]["header"]
+									segment = clients[addr]["data"][header[0]]
+									segment[int(header[2])] = data
+
+									if len(segment) >= int(header[1]):
+										data = b"".join(segment[i] for i in range(int(header[1])))
+
+										fire("received", addr, data)
+
+									clients[addr]["header"] = None
+								else:
+									# Receiving header.
+									print("Type: Header\n")
+
+									data = data.decode("utf-8")
+									data = data.split("\\")
+									clients[addr]["header"] = data
+
+									if data[0] not in clients[addr]["data"]:
+										clients[addr]["data"][data[0]] = {}
+
+								data = b""
 					except:
 						break
 
 				if reply == -1:
-					print("timeout", addr)
+					print(
+						"ahoge.py > Timeout",
+						"\nTarget:", addr,
+						"\n"
+					)
 					fire("timeout", addr)
 				elif reply:
-					print("failed", addr)
+					print(
+						"ahoge.py > Failed",
+						"\nTarget:", addr,
+						"\n"
+					)
 					fire("failed", addr)
 				else:
 					del clients[addr]
 
-					print("disconnected", addr)
+					print(
+						"ahoge.py > Disconnection",
+						"\nTarget:", addr,
+						"\n"
+					)
 					fire("disconnected", addr)
 
 				conn.close()
@@ -181,11 +258,11 @@ def load(senpai):
 							args=(conn, addr, 2)
 						).start()
 
-						conn.send(b' \n') # Send confirmation.
+						conn.send(eos) # Send confirmation.
 					except:
 						break
 
-				print("closed")
+				print("ahoge.py > Closed\n")
 				fire("closed")
 
 			threading.Thread(target=accept).start()
@@ -193,20 +270,33 @@ def load(senpai):
 			# Receiver Loop
 
 			def connect(addr):
+				print(
+					"ahoge.py > Connecting...",
+					"\nTarget:", addr
+				)
 				if addr in clients or addr == self.addr:
-					print("connection to", addr, "already exists.")
+					print("Status: Exists\n")
 					return True
 
-				print("connecting to", addr)
+				print("Status: Connecting\n")
 
 				try:
 					conn = socket.socket(
 						socket.AF_INET,
 						socket.SOCK_STREAM
 					)
-					clients[addr] = conn
+					clients[addr] = {
+						"conn": conn,
+						"data": {},
+						"header": None,
+						"lo": [],
+						"hi": 0
+					}
 
-					conn.connect(addr)
+					threading.Thread(
+						target=conn.connect,
+						args=(addr, )
+					).start()
 					threading.Thread(
 						target=recv,
 						args=(conn, addr, 1)
@@ -218,7 +308,45 @@ def load(senpai):
 
 			def disconnect(addr):
 				if addr in clients:
-					clients[addr].close()
+					clients[addr]["conn"].close()
+
+			def session(data, addr, id):
+				conn = clients[addr]["conn"]
+
+				# Setup buffer. Make space for the 'eos'.
+				buffer = self.buffer - len(eos)
+
+				# Get how many segments.
+				i = len(data)//buffer + (len(data)%buffer and 1)
+
+				# Create the header.
+				header = str(id).encode("utf-8") + b"\\" + str(i).encode("utf-8") + b"\\"
+
+				print(
+					"ahoge.py > Session",
+					"\nTarget:", addr,
+					"\nBuffer:", buffer,
+					"\nHeader:", header,
+					"\nPayload:", len(data)
+				)
+
+				for n in range(i):
+					# Send the header. id\index\total(eos)
+					conn.send(header + str(n).encode("utf-8") + eos)
+
+					# Send the segment.
+					conn.send(data[:buffer] + eos)
+
+					# Reduce the payload.
+					data = data[buffer:]
+					print("Payload:", len(data))
+
+				print("Payload: EOS\n")
+
+				if id == clients[addr]["hi"] - 1:
+					clients[addr]["hi"] -= 1
+				else:
+					clients[addr]["lo"].append(id)
 
 			def send(data, addr=None):
 				if not addr:
@@ -228,12 +356,23 @@ def load(senpai):
 					return True
 
 				if addr in clients:
-					conn = clients[addr]
+					conn = clients[addr]["conn"]
 					data = type(data) != bytes and data.encode("utf-8") or data
-					data += b'\n'
+					id = clients[addr]["hi"]
 
-					print("send", data)
-					conn.send(data)
+					# Find the next suitable ID for other sessions.
+					if len(clients[addr]["lo"]):
+						# If there are still available IDs previously.
+						id = clients[addr]["lo"][0]
+						clients[addr]["lo"].pop(0)
+					else:
+						# If there are no available IDs previously.
+						clients[addr]["hi"] += 1
+
+					threading.Thread(
+						target=session,
+						args=(data, addr, id)
+					).start()
 
 				return False
 
@@ -242,10 +381,11 @@ def load(senpai):
 				status = 0
 
 				for addr in clients.copy():
-					clients[addr].close()
+					clients[addr]["conn"].close()
 
 				sock.close()
 
+			self.buffer = buffer
 			self.send = send
 			self.connect = connect
 			self.disconnect = disconnect
