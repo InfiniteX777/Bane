@@ -11,16 +11,26 @@ import re
 
 index = []
 
+for i in range(10):
+	index.append(str(i))
+
 for i in range(26):
-	if i < 10:
-		index.insert(i, str(i))
+	index.append(chr(i+97))
 
-	index.insert(i+10, chr(i+97))
-	#index.insert(i+10, chr(i+65))
-	#index.insert(i+37, chr(i+97))
+for i in range(26):
+	index.append(chr(i+65))
 
-def encode(addr):
-	n = len(index)
+index.extend([
+	"`", "~", "!", "@", "#",
+	"$", "%", "^", "&", "*",
+	"(", ")", "-", "_", "=",
+	"+", "[", "{", "]", "}",
+	";", ":", "'", '"', "|",
+	",", "<", ".", ">", "/"
+])
+
+def encode(addr, base=36):
+	base = min(base, len(index)) or len(index)
 	v = "1"
 	res = ""
 
@@ -30,14 +40,14 @@ def encode(addr):
 	v = int(v + str(addr[1]))
 
 	while v:
-		i = v%n
+		i = v%base
 		res = str(index[i]) + res
-		v = v//n
+		v = v//base
 
 	return res
 
-def decode(v):
-	n = len(index)
+def decode(v, base=36):
+	base = min(base, len(index)) or len(index)
 	res = 0
 	i = len(v)-1
 
@@ -45,7 +55,7 @@ def decode(v):
 		if not k in index:
 			return # Invalid syntax.
 
-		res += index.index(k)*(n**i)
+		res += index.index(k)*(base**i)
 		i -= 1
 
 	try:
