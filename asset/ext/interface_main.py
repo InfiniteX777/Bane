@@ -62,6 +62,7 @@ kuudere = senpai.remote["kuudere"]
 # Server Init
 server = ahoge.stream((ahoge.ip, 0))
 code = socket_encoder.encode(server.addr)
+code2 = socket_encoder.encode(server.addr, 0)
 selected_room = "global"
 rooms = {
 	"global": room.Room("global", "Global")
@@ -133,23 +134,30 @@ def draw():
 
 def success(addr):
 	# Successfully connected to a server.
-	global name, code, rooms
+	global name, rooms, code2
 
 	server.send("1global" + rooms["global"].players, addr)
+
+	if room.cache:
+		cache = room.cache[1:]
+		server.send("3" + cache, addr)
+
+		i = 0
+		for v in cache.split("\\"):
+			i = (i+1)%2
+
+			if i:
+				server.send(
+					"1" + v + "\\" + code2 + "\\" + name,
+					addr
+				)
 
 server.on("success", success)
-
-def connected(addr):
-	# A client has connected.
-	global rooms
-
-	server.send("1global" + rooms["global"].players, addr)
-
-server.on("connected", connected)
+server.on("connected", success)
 
 def disconnected(addr):
 	global rooms
-	i = socket_encoder.encode(addr)
+	i = socket_encoder.encode(addr, 0)
 
 	for k in rooms:
 		if rooms[k].has(addr):
@@ -166,10 +174,10 @@ def disconnected(addr):
 server.on("disconnected", disconnected)
 
 def received(addr, data):
+	print("RECV " + str(addr) + " " + str(data))
 	global name, code
 	i = data[:1].decode("utf-8")
 	data = data[1:]
-	print("recv", data)
 
 	if i != "5":
 		data = data.decode("utf-8")
@@ -180,7 +188,7 @@ def received(addr, data):
 		text = data[sep+1:]
 
 		if i[0] == "0":
-			i = "0" + socket_encoder.encode(addr)
+			i = "0" + socket_encoder.encode(addr, 0)
 
 		if i in rooms:
 			rooms[i].chat(text)
@@ -196,7 +204,7 @@ def received(addr, data):
 		i = data[:sep]
 
 		if i[0] == "0":
-			i = "0" + socket_encoder.encode(addr)
+			i = "0" + socket_encoder.encode(addr, 0)
 
 		if i not in rooms:
 			rooms[i] = room.Room(i)
@@ -214,7 +222,7 @@ def received(addr, data):
 
 				target = None
 			elif target == None:
-				v = socket_encoder.decode(v)
+				v = socket_encoder.decode(v, 0)
 
 				if rooms[i].has(v):
 					target = 0
@@ -234,14 +242,14 @@ def received(addr, data):
 		for v in data.split("\\"):
 			if i:
 				if i in rooms:
-					rooms[i].name = v
+					rooms[i].rename(v)
 				else:
 					rooms[i] = room.Room(i, v)
 
 				i = None
 			else:
 				if v[0] == "0":
-					v = "0" + socket_encoder.encode(addr)
+					v = "0" + socket_encoder.encode(addr, 0)
 
 				i = v
 
@@ -254,10 +262,10 @@ def received(addr, data):
 		if i in rooms:
 			if rooms[i].has(addr):
 				# Update password.
-				rooms[i].password = data or None
-			elif not rooms[i].password or rooms[i].password == data:
+				rooms[i].password = data
+			elif rooms[i].password == "" or rooms[i].password == data:
 				# Someone wants to join.
-				id = socket_encoder.encode(addr)
+				id = socket_encoder.encode(addr, 0)
 				v = rooms["global"].get(addr)
 
 				# Add him.
@@ -340,10 +348,14 @@ def set_name(v):
 
 	room_update()
 
-write("Invite: " + code,
-	(10, 8 + 30))
-write(server.addr[0] + ":" + str(server.addr[1]),
-	(10, 8))
+write(
+	"Invite: " + code,
+	(10, 8 + 30)
+)
+write(
+	server.addr[0] + ":" + str(server.addr[1]),
+	(10, 8)
+)
 
 
 # Room System
@@ -355,13 +367,13 @@ player_frame = kouhai.Frame({
 })
 
 def player_mousebuttondown(event):
-	global rooms, selected_room, chatbox
+	global rooms, selected_room, chatbox, code2, name
 	i = int(event.pos[1]/30) + rooms[selected_room].player_scroll
 
 	addr2, name2 = rooms[selected_room].get(i)
 
 	if addr2 and addr2 != server.addr:
-		i = "0"+socket_encoder.encode(addr2)
+		i = "0" + socket_encoder.encode(addr2, 0)
 
 		if i in rooms:
 			rooms[i].visible = not rooms[i].visible
@@ -372,7 +384,10 @@ def player_mousebuttondown(event):
 			rooms[i].update()
 
 			server.send("1" + i + rooms[i].players, addr2)
-			server.send("30" + code + "\\" + name, addr2)
+			server.send(
+				"30" + code2 + "\\" + name,
+				addr2
+			)
 
 		selected_room = i
 		room_update()
@@ -474,7 +489,7 @@ def chat_mousebuttondown(event):
 chat_frame.on("mousebuttondown", chat_mousebuttondown)
 
 def chat_keyinput(event):
-	global room_id, room, selected_room, code, name
+	global room_id, room, selected_room, code2, name
 	text = chat_textbox.properties["text"]
 
 	chat_surface.fill((0, 0, 0, 0))
@@ -558,11 +573,13 @@ def chat_keyinput(event):
 				rooms[selected_room].chat(
 					"You're already in this room!"
 				)
-		elif text[:8] == "/public ":
-			# Host a public room. Everybody can see this room but
+		elif text[:6] == "/host ":
+			# Host a room. Everybody can see this room but
 			# cannot see the chat. They have to join the room
-			# with the right password to see it.
-			text = text[8:]
+			# with the right password to see it. Providing no
+			# password will not allow anyone to join unless
+			# invited.
+			text = text[6:]
 			pw = None
 
 			if " " in text:
@@ -572,7 +589,7 @@ def chat_keyinput(event):
 				text = text[:sep]
 
 			if len(text) > 0 and "\\" not in text and (not pw or (" " not in pw and "\\" not in pw)):
-				id = str(room_id) + code
+				id = str(room_id) + code2
 				rooms[id] = room.Room(id, text)
 				rooms[id].password = pw
 
@@ -584,26 +601,8 @@ def chat_keyinput(event):
 				server.send("3" + id + "\\" + text)
 				server.send(
 					"1" + id + "\\" +
-					code + "\\" + name
+					code2 + "\\" + name
 				)
-
-				room_id += 1
-		elif text[:9] == "/private ":
-			# Host a private room. Only the users connected to
-			# it can see the room.
-			text = text[9:]
-
-			if len(text) > 0 and " " not in text and "\\" not in text:
-				id = str(room_id) + code
-				rooms[id] = room.Room(id, text)
-
-				rooms[id].add(server.addr, name)
-				rooms[id].update()
-				room_update()
-
-				# Broadcast the room id, but not the
-				# player list.
-				server.send("3" + id + "\\" + text)
 
 				room_id += 1
 		elif text[:5] == "/send":
