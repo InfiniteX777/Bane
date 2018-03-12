@@ -91,7 +91,17 @@ import socket, time, threading, re, math
 
 cache = {}
 timeout = 5
-eos = chr(10000).encode("utf-8") # End of stream.
+eos = chr(1114111).encode("utf-8") # End of stream.
+
+def send(conn, data):
+	alive = 1
+
+	while alive:
+		try:
+			conn.send(data)
+			break
+		except:
+			pass
 
 def load(senpai):
 	moe = senpai.remote["moe"]
@@ -109,6 +119,8 @@ def load(senpai):
 			# Server Loop
 
 			def recv(conn, addr, reply):
+				global send
+
 				def callback():
 					nonlocal reply
 
@@ -134,7 +146,7 @@ def load(senpai):
 						if eos in data:
 							# Received a newline character.
 							# End of stream.
-							data = data[:-3]
+							data = data[:-len(eos)]
 
 							if reply:
 								# Handshake first.
@@ -161,14 +173,14 @@ def load(senpai):
 										args=("connected", addr)
 									).start()
 									print(
-										"ahoge.py > Connection",
-										"\nTarget:", addr,
-										"\nEcho:", data,
+										"ahoge.py > Connection" +
+										"\nTarget: " + str(addr) +
+										"\nEcho: " + str(data) +
 										"\n"
 									)
 								else:
 									# Client-side.
-									conn.send((
+									send(conn, (
 										self.addr[0] + ":" +
 										str(self.addr[1])
 									).encode("utf-8") + eos)
@@ -178,8 +190,8 @@ def load(senpai):
 										args=("success", addr)
 									).start()
 									print(
-										"ahoge.py > Success",
-										"\nTarget:", addr,
+										"ahoge.py > Success" +
+										"\nTarget: " + str(addr) +
 										"\n"
 									)
 
@@ -188,9 +200,9 @@ def load(senpai):
 							else:
 								# Data received.
 								print(
-									"ahoge.py > Receiving",
-									"\nTarget:", addr,
-									"\nPayload:", len(data)
+									"ahoge.py > Receiving" +
+									"\nTarget: " + str(addr) +
+									"\nPayload: " + str(len(data))
 								)
 
 								if clients[addr]["header"]:
@@ -224,15 +236,15 @@ def load(senpai):
 
 				if reply == -1:
 					print(
-						"ahoge.py > Timeout",
-						"\nTarget:", addr,
+						"ahoge.py > Timeout" +
+						"\nTarget: " + str(addr) +
 						"\n"
 					)
 					fire("timeout", addr)
 				elif reply:
 					print(
-						"ahoge.py > Failed",
-						"\nTarget:", addr,
+						"ahoge.py > Failed" +
+						"\nTarget: " + str(addr) +
 						"\n"
 					)
 					fire("failed", addr)
@@ -240,8 +252,8 @@ def load(senpai):
 					del clients[addr]
 
 					print(
-						"ahoge.py > Disconnection",
-						"\nTarget:", addr,
+						"ahoge.py > Disconnection" +
+						"\nTarget: " + str(addr) +
 						"\n"
 					)
 					fire("disconnected", addr)
@@ -249,6 +261,8 @@ def load(senpai):
 				conn.close()
 
 			def accept():
+				global send
+
 				while status:
 					try:
 						conn, addr = sock.accept()
@@ -258,7 +272,7 @@ def load(senpai):
 							args=(conn, addr, 2)
 						).start()
 
-						conn.send(eos) # Send confirmation.
+						send(conn, eos) # Send confirmation.
 					except:
 						break
 
@@ -271,8 +285,8 @@ def load(senpai):
 
 			def connect(addr):
 				print(
-					"ahoge.py > Connecting...",
-					"\nTarget:", addr
+					"ahoge.py > Connecting..." +
+					"\nTarget: " + str(addr)
 				)
 				if addr in clients or addr == self.addr:
 					print("Status: Exists\n")
@@ -311,6 +325,7 @@ def load(senpai):
 					clients[addr]["conn"].close()
 
 			def session(data, addr, id):
+				global send
 				conn = clients[addr]["conn"]
 
 				# Setup buffer. Make space for the 'eos'.
@@ -323,23 +338,29 @@ def load(senpai):
 				header = str(id).encode("utf-8") + b"\\" + str(i).encode("utf-8") + b"\\"
 
 				print(
-					"ahoge.py > Session",
-					"\nTarget:", addr,
-					"\nBuffer:", buffer,
-					"\nHeader:", header,
-					"\nPayload:", len(data)
+					"ahoge.py > Session" +
+					"\nTarget: " + str(addr) +
+					"\nBuffer: " + str(buffer) +
+					"\nHeader: " + str(header) +
+					"\nPayload: ", str(len(data))
 				)
 
 				for n in range(i):
 					# Send the header. id\index\total(eos)
-					conn.send(header + str(n).encode("utf-8") + eos)
+					send(
+						conn,
+						header + str(n).encode("utf-8") + eos
+					)
 
 					# Send the segment.
-					conn.send(data[:buffer] + eos)
+					send(
+						conn,
+						data[:buffer] + eos
+					)
 
 					# Reduce the payload.
 					data = data[buffer:]
-					print("Payload:", len(data))
+					print("Payload: " + str(len(data)))
 
 				print("Payload: EOS\n")
 
@@ -349,6 +370,8 @@ def load(senpai):
 					clients[addr]["lo"].append(id)
 
 			def send(data, addr=None):
+				global send
+
 				if not addr:
 					for addr in clients:
 						send(data, addr)
