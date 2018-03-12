@@ -42,6 +42,7 @@ body = kuudere.get("calibri", 18, False)
 body_line = body.get_linesize() + 10
 
 server = None
+cache = ""
 
 def set_server(v):
 	global server
@@ -49,9 +50,22 @@ def set_server(v):
 
 class Room:
 	def __init__(self, room, name="Untitled Room"):
-		global server, body, body_line
+		global server, body, body_line, cache
 		players = {}
 		chats = []
+		id = "\\" + room + "\\" + name
+
+		def rename(name):
+			nonlocal id, room
+			global cache
+
+			self.name = name
+			prev = id
+			id = "\\" + room + "\\" + name
+
+			if prev in cache:
+				i = cache.index(prev)
+				cache = cache[:i] + id + cache[i+len(prev):]
 
 		def broadcast(data):
 			for addr in players:
@@ -117,19 +131,34 @@ class Room:
 			return v
 
 		def add(addr, name):
+			global cache
+
 			if addr not in players:
-				self.players += "\\" + socket_encoder.encode(addr) + "\\" + name
+				if room[0] != "0" and room != "global" and not len(players) and addr == server.addr:
+					cache += id
+
+				self.players += "\\" + socket_encoder.encode(addr, 0) + "\\" + name
 
 				players[addr] = name
 
 		def rem(addr):
+			global cache
+
 			if addr in players:
-				tag = socket_encoder.encode(addr)
+				tag = socket_encoder.encode(addr, 0)
 				n = "\\" + tag + "\\" + players[addr]
 				i = self.players.find(n)
 				self.players = self.players[:i] + self.players[i+len(n):]
 
 				del players[addr]
+
+				if addr == server.addr:
+					if id in cache:
+						i = cache.index(id)
+						cache = cache[:i] + cache[i+len(id):]
+				elif len(players) and list(players)[0] == server.addr:
+					if room[0] != "0" and room != "global" and id not in cache:
+						cache += id
 
 		def update_player():
 			self.player_surface = pygame.Surface(
@@ -169,6 +198,7 @@ class Room:
 		self.player_surface = None
 		self.player_scroll = 0
 		self.player_scroll_delta = 0
+		self.rename = rename
 		self.broadcast = broadcast
 		self.chat = chat
 		self.get = get
