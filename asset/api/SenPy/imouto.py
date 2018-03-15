@@ -63,7 +63,6 @@ event_index = {
 
 # Key input repetition.
 key, key_delay = None, None
-closed = False
 
 def load(senpai):
 	# import
@@ -77,6 +76,7 @@ def load(senpai):
 		background = 0, 0 ,0
 		screen = None
 		rect = None
+		closed = 0
 
 		on, fire = moe()
 
@@ -104,7 +104,7 @@ def load(senpai):
 		'''
 		def update():
 			# change scope
-			global key, key_delay, closed
+			global key, key_delay
 
 			this.clock.tick(this.fps)
 
@@ -121,6 +121,8 @@ def load(senpai):
 
 				if event.type == pygame.QUIT:
 					# bye bye :(
+					this.closed = 1
+
 					sys.exit()
 				elif event.type == pygame.VIDEORESIZE:
 					this.resize(*event.dict['size'])
