@@ -45,7 +45,7 @@
 			A file transfered. The name also includes the
 			extension.
 '''
-import pygame, re, math, tkinter, os
+import pygame, re, math, tkinter, os, threading, time
 import asset.ext.socket_encoder as socket_encoder
 import asset.ext.room as room
 from tkinter import filedialog
@@ -85,6 +85,25 @@ img_lock = pygame.image.load("asset/img/lock.png")
 
 placeholder = "[Invite Code Here]"
 
+
+# Create an auto-connection with a specified server.
+
+def _loop():
+	global server
+	dedi = ("127.0.0.1", 6000)
+
+	while not imouto.closed:
+		try:
+			if not server.has(dedi):
+				server.connect(dedi)
+		except:
+			pass
+
+		time.sleep(5)
+
+threading.Thread(
+	target = _loop
+).start()
 
 # Update
 
@@ -161,9 +180,15 @@ def disconnected(addr):
 
 	for k in rooms:
 		if rooms[k].has(addr):
+			v = rooms[k].get(addr)
 			rooms[k].chat(
-				"'" + rooms[k].get(addr) +
-				"' has disconnected."
+				v and (
+					"'" + rooms[k].get(addr) +
+					"' has disconnected."
+				) or (
+					"Disconnected from dedicated server '" +
+					str(addr) + "'."
+				)
 			)
 
 		rooms[k].rem(addr)
@@ -174,7 +199,6 @@ def disconnected(addr):
 server.on("disconnected", disconnected)
 
 def received(addr, data):
-	print("RECV " + str(addr) + " " + str(data))
 	global name, code
 	i = data[:1].decode("utf-8")
 	data = data[1:]
@@ -218,7 +242,13 @@ def received(addr, data):
 				rooms[i].add(target, v)
 
 				if i == "global":
-					rooms[i].chat("connected with '" + v + "'.")
+					rooms[i].chat(
+						v and ("Connected with '" + v + "'.") or
+						(
+							"Connected to dedicated server '" +
+							str(addr) + "'."
+						)
+					)
 
 				target = None
 			elif target == None:
@@ -277,14 +307,16 @@ def received(addr, data):
 				)
 				# Tell him that the password was correct.
 				server.send(
-					"4" + i + "\\" + (rooms[i].password or "")
+					"4" + i + "\\" + (rooms[i].password or ""),
+					addr
 				)
 				# Tell everybody a new user joined.
 				rooms[i].broadcast(
 					"1" + i + "\\" + id + "\\" + v
 				)
 				rooms[i].broadcast(
-					"0" + i + "\\'" + v + "' has joined."
+					"0" + i + "\\'" + v + "' has joined.",
+					1
 				)
 				rooms[i].chat("'" + v + "' has joined.")
 				rooms[i].update()
@@ -516,47 +548,53 @@ def chat_keyinput(event):
 			if addr:
 				if selected_room == "global":
 					server.connect(addr)
-				elif selected_room[0] != "0":
-					# Make sure this is not the 1-on-1 chat.
-					if rooms["global"].has(addr):
-						if rooms[selected_room].has(server.addr):
-							i = rooms["global"].get(addr)
+				else:
+					if selected_room[0] == "0":
+						return rooms[selected_room].chat(
+							"You can't invite someone here!"
+						)
 
-							# Add him.
-							rooms[selected_room].add(addr, i)
-							rooms[selected_room].update()
-
-							# Send him the player list and room name.
-							server.send(
-								"3" + selected_room + "\\" +
-								rooms[selected_room].name,
-								addr
-							)
-							server.send(
-								"1" + selected_room +
-								rooms[selected_room].players,
-								addr
-							)
-
-							# Tell everybody a new guy joined.
-							rooms[selected_room].broadcast(
-								"1" + selected_room + "\\" + i
-							)
-							rooms[selected_room].broadcast(
-								"0" + selected_room + "\\'" + name +
-								"' has invited '" + i + "'."
-							)
-						else:
-							rooms[selected_room].chat(
-								"You don't have access to this room!"
-							)
-					else:
-						rooms[selected_room].chat(
+					if not rooms["global"].has(addr):
+						return rooms[selected_room].chat(
 							"That person isn't in the server :("
 						)
-				else:
-					rooms[selected_room].chat(
-						"You can't invite someone here!"
+
+					if not rooms["global"].get(addr):
+						return rooms[selected_room].chat(
+							"You can't invite dedicated servers!"
+						)
+
+					if not rooms[selected_room].has(server.addr):
+						return rooms[selected_room].chat(
+							"You don't have access to this room!"
+						)
+
+					i = rooms["global"].get(addr)
+
+					# Add him.
+					rooms[selected_room].add(addr, i)
+					rooms[selected_room].update()
+
+					# Send him the player list and room name.
+					server.send(
+						"3" + selected_room + "\\" +
+						rooms[selected_room].name,
+						addr
+					)
+					server.send(
+						"1" + selected_room +
+						rooms[selected_room].players,
+						addr
+					)
+
+					# Tell everybody a new guy joined.
+					rooms[selected_room].broadcast(
+						"1" + selected_room + "\\" + i
+					)
+					rooms[selected_room].broadcast(
+						"0" + selected_room + "\\'" + name +
+						"' has invited '" + i + "'.",
+						1
 					)
 			else:
 				rooms[selected_room].chat(
@@ -567,7 +605,8 @@ def chat_keyinput(event):
 			# Send a request to join a public room.
 			if not rooms[selected_room].has(server.addr):
 				rooms[selected_room].broadcast(
-					"4" + selected_room + "\\" + text[6:]
+					"4" + selected_room + "\\" + text[6:],
+					1
 				)
 			else:
 				rooms[selected_room].chat(
@@ -598,8 +637,8 @@ def chat_keyinput(event):
 				room_update()
 
 				# Broadcast the room id and the player.
-				server.send("3" + id + "\\" + text)
-				server.send(
+				rooms["global"].broadcast("3" + id + "\\" + text)
+				rooms["global"].broadcast(
 					"1" + id + "\\" +
 					code2 + "\\" + name
 				)
@@ -623,18 +662,20 @@ def chat_keyinput(event):
 				rooms[selected_room].broadcast(
 					b"5" +
 					os.path.basename(file.name).encode("utf-8") +
-					b"\\" + file.read()
+					b"\\" + file.read(),
+					1
 				)
 
 				# Close it.
 				file.close()
-		else:
+		elif rooms[selected_room].has(server.addr):
 			# Chat in your selected room.
 			text = name + " : " + text
 
 			rooms[selected_room].chat(text)
 			rooms[selected_room].broadcast(
-				"0" + selected_room + "\\" + text
+				"0" + selected_room + "\\" + text,
+				1
 			)
 
 		text = ""
