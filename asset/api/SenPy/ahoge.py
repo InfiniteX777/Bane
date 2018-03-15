@@ -116,6 +116,9 @@ def load(senpai):
 
 			self.addr = sock.getsockname()
 
+			def has(addr):
+				return addr in clients
+
 			# Server Loop
 
 			def recv(conn, addr, reply):
@@ -130,10 +133,10 @@ def load(senpai):
 
 				threading.Timer(timeout, callback).start()
 
-				data = b""
+				queue = b""
 				while status and reply > -1:
 					try:
-						i = conn.recv(1)
+						i = conn.recv(self.buffer)
 
 						if not i:
 							# Received an empty data.
@@ -141,12 +144,14 @@ def load(senpai):
 							conn.close()
 							break # Stop the loop.
 
-						data += i
+						queue += i
 
-						if eos in data:
+						while eos in queue:
 							# Received a newline character.
 							# End of stream.
-							data = data[:-len(eos)]
+							i = queue.index(eos)
+							data = queue[:i]
+							queue = queue[i+len(eos):]
 
 							if reply:
 								# Handshake first.
@@ -172,6 +177,7 @@ def load(senpai):
 										target=fire,
 										args=("connected", addr)
 									).start()
+
 									print(
 										"ahoge.py > Connection" +
 										"\nTarget: " + str(addr) +
@@ -196,7 +202,6 @@ def load(senpai):
 									)
 
 								reply = 0
-								data = b""
 							else:
 								# Data received.
 								print(
@@ -229,8 +234,6 @@ def load(senpai):
 
 									if data[0] not in clients[addr]["data"]:
 										clients[addr]["data"][data[0]] = {}
-
-								data = b""
 					except:
 						break
 
@@ -242,6 +245,9 @@ def load(senpai):
 					)
 					fire("timeout", addr)
 				elif reply:
+					if addr in clients:
+						del clients[addr]
+
 					print(
 						"ahoge.py > Failed" +
 						"\nTarget: " + str(addr) +
@@ -288,6 +294,7 @@ def load(senpai):
 					"ahoge.py > Connecting..." +
 					"\nTarget: " + str(addr)
 				)
+
 				if addr in clients or addr == self.addr:
 					print("Status: Exists\n")
 					return True
@@ -364,6 +371,10 @@ def load(senpai):
 
 				print("Payload: EOS\n")
 
+				if addr not in clients:
+					# Was disconnected during stream :(
+					return
+
 				if id == clients[addr]["hi"] - 1:
 					clients[addr]["hi"] -= 1
 				else:
@@ -408,6 +419,7 @@ def load(senpai):
 
 				sock.close()
 
+			self.has = has
 			self.buffer = buffer
 			self.send = send
 			self.connect = connect
