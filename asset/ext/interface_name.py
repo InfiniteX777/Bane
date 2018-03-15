@@ -135,9 +135,10 @@ def btn(x, y, text, callback):
 
 	update()
 
-def txt(x, y, placeholder):
+def txt(x, y, placeholder, text=""):
 	textbox = kouhai.TextBox({
-		"rect": (x, y, 180, 30)
+		"rect": (x, y, 180, 30),
+		"text": text
 	})
 	surface = pygame.Surface(
 		(200, 50),
@@ -185,12 +186,35 @@ def login():
 btn(310, 255, "Login", login)
 
 def server():
-	pass
+	ip = list_txt[1][0].properties["text"]
+	port = list_txt[2][0].properties["text"]
+
+	try:
+		# Check address syntax.
+		port = int(port)
+
+		if len([int(x) for x in ip.split(".")[:4]]) != 4:
+			return
+	except:
+		return
+
+	for frame, _ in list_btn:
+		frame.destroy()
+
+	for frame, _ in list_txt:
+		frame.destroy()
+
+	import asset.ext.interface_server as main
+
+	main.set_server((
+		list_txt[1][0].properties["text"],
+		int(list_txt[2][0].properties["text"])
+	))
 
 btn(310, 405, "Start Dedicated Server", server)
 
 txt(310, 210, "Name")
-txt(310, 320, "IPv4 Address")
-txt(310, 360, "Port")
+txt(310, 320, "IPv4 Address", "127.0.0.1")
+txt(310, 360, "Port", "6000")
 
 threading.Timer(1, draw).start()
