@@ -67,9 +67,9 @@ class Room:
 				i = cache.index(prev)
 				cache = cache[:i] + id + cache[i+len(prev):]
 
-		def broadcast(data):
+		def broadcast(data, nonserver=0):
 			for addr in players:
-				if addr != server.addr:
+				if addr != server.addr and (not nonserver or players[addr]):
 					server.send(data, addr)
 
 		def chat(data):
@@ -117,9 +117,14 @@ class Room:
 		def get(i):
 			if type(i) == int:
 				if i < len(players):
-					addr = list(players)[i]
+					n = 0
 
-					return addr, players[addr]
+					for addr in players:
+						if players[addr]:
+							n += 1
+
+							if n == i:
+								return addr, players[addr]
 
 				return None, None
 			elif i in players:
@@ -168,25 +173,26 @@ class Room:
 
 			i = 0
 			for addr in players:
-				image = body.render(
-					players[addr],
-					True,
-					(255, 255, 255)
-				)
-				rect = image.get_rect()
+				if players[addr]:
+					image = body.render(
+						players[addr],
+						True,
+						(255, 255, 255)
+					)
+					rect = image.get_rect()
 
-				self.player_surface.blit(image,
-					(10, i*30 + 8)
-				)
+					self.player_surface.blit(image,
+						(10, i*30 + 8)
+					)
 
-				pygame.draw.line(
-					self.player_surface,
-					(34, 34, 34),
-					(0, i*30 + 29),
-					(200, i*30 + 29)
-				)
+					pygame.draw.line(
+						self.player_surface,
+						(34, 34, 34),
+						(0, i*30 + 29),
+						(200, i*30 + 29)
+					)
 
-				i += 1
+					i += 1
 
 		self.password = None
 		self.name = name
