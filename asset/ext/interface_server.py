@@ -2,9 +2,7 @@ import pygame, threading
 
 import asset.api.SenPy as senpai
 ahoge = senpai.remote["ahoge"]
-kouhai = senpai.remote["kouhai"]
 imouto = senpai.remote["imouto"]
-kuudere = senpai.remote["kuudere"]
 
 import asset.ext.socket_encoder as socket_encoder
 
