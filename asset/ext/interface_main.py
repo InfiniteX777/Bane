@@ -657,17 +657,13 @@ def chat_keyinput(event):
 
 				# Read it again, but in binary.
 				file = open(i, "rb")
-
-				# Send a broadcast across the room.
-				rooms[selected_room].broadcast(
-					b"5" +
-					os.path.basename(file.name).encode("utf-8") +
-					b"\\" + file.read(),
-					1
-				)
+				i = b"5" + os.path.basename(file.name).encode("utf-8") + b"\\" + file.read()
 
 				# Close it.
 				file.close()
+
+				# Send a broadcast across the room.
+				rooms[selected_room].broadcast(i, 1)
 		elif rooms[selected_room].has(server.addr):
 			# Chat in your selected room.
 			text = name + " : " + text
