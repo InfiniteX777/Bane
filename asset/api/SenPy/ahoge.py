@@ -94,9 +94,7 @@ timeout = 5
 eos = chr(1114111).encode("utf-8") # End of stream.
 
 def send(conn, data):
-	alive = 1
-
-	while alive:
+	while 1:
 		try:
 			conn.send(data)
 			break
@@ -112,6 +110,7 @@ def load(senpai):
 			status = 1
 			self.on, fire = moe()
 			clients = {}
+			sessions = {}
 			queue = []
 
 			self.addr = sock.getsockname()
@@ -331,54 +330,50 @@ def load(senpai):
 				if addr in clients:
 					clients[addr]["conn"].close()
 
-			def session(data, addr, id):
+			def session():
+				nonlocal sessions
 				global send
-				conn = clients[addr]["conn"]
 
-				# Setup buffer. Make space for the 'eos'.
-				buffer = self.buffer - len(eos)
+				while len(sessions):
+					for addr, id in list(sessions.keys()):
+						header = sessions[(addr, id)][0]
+						buffer = sessions[(addr, id)][2]
+						data = sessions[(addr, id)][3]
+						conn = clients[addr]["conn"]
 
-				# Get how many segments.
-				i = len(data)//buffer + (len(data)%buffer and 1)
+						# Send the header. id\index\total(eos)
+						send(
+							conn,
+							header +
+							str(sessions[(addr, id)][1]).encode("utf-8") +
+							eos
+						)
 
-				# Create the header.
-				header = str(id).encode("utf-8") + b"\\" + str(i).encode("utf-8") + b"\\"
+						# Send the segment.
+						send(conn, data[:buffer] + eos)
 
-				print(
-					"ahoge.py > Session" +
-					"\nTarget: " + str(addr) +
-					"\nBuffer: " + str(buffer) +
-					"\nHeader: " + str(header) +
-					"\nPayload: ", str(len(data))
-				)
+						# Increment step.
+						sessions[(addr, id)][1] += 1
 
-				for n in range(i):
-					# Send the header. id\index\total(eos)
-					send(
-						conn,
-						header + str(n).encode("utf-8") + eos
-					)
+						# Reduce the payload.
+						sessions[(addr, id)][3] = data[buffer:]
+						data = sessions[(addr, id)][3]
 
-					# Send the segment.
-					send(
-						conn,
-						data[:buffer] + eos
-					)
+						if addr not in clients:
+							# Was disconnected during stream :(
+							del sessions[(addr, id)]
 
-					# Reduce the payload.
-					data = data[buffer:]
-					print("Payload: " + str(len(data)))
+							return
 
-				print("Payload: EOS\n")
+						print("Payload: " + str(len(data)))
 
-				if addr not in clients:
-					# Was disconnected during stream :(
-					return
+						if not data:
+							del sessions[(addr, id)]
 
-				if id == clients[addr]["hi"] - 1:
-					clients[addr]["hi"] -= 1
-				else:
-					clients[addr]["lo"].append(id)
+							if id == clients[addr]["hi"] - 1:
+								clients[addr]["hi"] -= 1
+							else:
+								clients[addr]["lo"].append(id)
 
 			def send(data, addr=None):
 				global send
@@ -403,10 +398,30 @@ def load(senpai):
 						# If there are no available IDs previously.
 						clients[addr]["hi"] += 1
 
-					threading.Thread(
-						target=session,
-						args=(data, addr, id)
-					).start()
+					# Setup buffer. Make space for the 'eos'.
+					buffer = self.buffer - len(eos)
+
+					# Get how many segments.
+					i = len(data)
+					i = i//buffer + (i%buffer and 1)
+
+					# Create the header.
+					header = (str(id) + "\\" + str(i) + "\\").encode("utf-8")
+
+					sessions[(addr, id)] = [header, 0, buffer, data]
+
+					print(
+						"ahoge.py > Session" +
+						"\nTarget: " + str(addr) +
+						"\nBuffer: " + str(buffer) +
+						"\nHeader: " + str(header) +
+						"\nPayload: " + str(len(data))
+					)
+
+					if len(sessions) <= 1:
+						threading.Thread(
+							target=session
+						).start()
 
 				return False
 
