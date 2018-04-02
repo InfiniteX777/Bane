@@ -69,6 +69,8 @@ def load(senpai):
 	moe = senpai.remote["moe"]
 
 	class this:
+		__new__ = senpai.__new__
+
 		clock = pygame.time.Clock()
 		fps = 0
 		size = width, height = 320, 240
