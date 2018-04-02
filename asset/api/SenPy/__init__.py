@@ -1,28 +1,37 @@
-''' The one.
+''' He who is yearned to notice thy forsaken souls. Thy foul sins who
+	desire will be purged, and be forgotten by the senpai.
 '''
-
 import importlib
-
-# Private
-remote_list = (
-	"moe", # Event Creator
-	"imouto", # Game Interface
-	"ahoge", # Network Interface
-	"kouhai", # GUI Input
-	"kuudere" # Font Manager
-)
 
 remote = {}
 
-# Make senpai's clone
-class this:
-	remote = None
+def load():
+	global load
+	del load
 
-this.remote = remote
+	# Create a dummy senpai to fool those wretched demons.
+	# (Allows remote access of 'SenPy.py' from other modules.)
+	class this:
+		def __new__(self):
+			raise Exception("Cannot instantiate this class.")
 
-# Load senpai's subordinates.
-def get(name):
-	this.remote[name] = importlib.import_module(__package__ + "." + name).load(this)
+	# Hook the remote to the dummy.
+	this.remote = remote
 
-for v in remote_list:
-	get(v)
+	# Load senpai's subordinates.
+	def get(name):
+		remote[name] = importlib.import_module(
+			__package__ + "." + name
+		).load(this)
+
+	for v in list((
+		"moe", # Event Creator
+		"tsundere", # Miscellaneous
+		"imouto", # Game Interface
+		"ahoge", # Network Interface
+		"kouhai", # GUI Input
+		"kuudere" # Font Manager
+	)):
+		get(v)
+
+load()
