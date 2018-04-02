@@ -31,7 +31,7 @@ def get(room, code=0):
 
 	return room[i-1:n]
 
-def _success(addr):
+def success(addr):
 	global rooms
 
 	server.send("1global" + rooms["global"][1], addr)
@@ -45,13 +45,7 @@ def _success(addr):
 			if v:
 				server.send("1" + k + get(rooms[k][1]), addr)
 
-def success(addr):
-	threading.Thread(
-		target = _success,
-		args = (addr,)
-	).start()
-
-def _disconnected(addr):
+def disconnected(addr):
 	global rooms
 	code = socket_encoder.encode(addr, 0)
 
@@ -63,12 +57,6 @@ def _disconnected(addr):
 
 			if k != "global" and not rooms[k][1]:
 				del rooms[k]
-
-def disconnected(addr):
-	threading.Thread(
-		target = _disconnected,
-		args = (addr,)
-	).start()
 
 def received(addr, data):
 	global rooms
@@ -93,7 +81,7 @@ def received(addr, data):
 				rooms[i][1] += "\\" + target + "\\" + v
 				target = None
 			elif target == None:
-				if v in rooms[i][1]:
+				if "\\" + v in rooms[i][1]:
 					target = 0
 				else:
 					target = v
