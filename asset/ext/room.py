@@ -38,8 +38,8 @@ import asset.api.SenPy as senpai
 kuudere = senpai.remote["kuudere"]
 
 # Font
-body = kuudere.get("calibri", 18, False)
-body_line = body.get_linesize() + 10
+body = kuudere.get("calibri", 12, False)
+body_line = body.get_linesize()
 
 server = None
 cache = ""
@@ -78,16 +78,16 @@ class Room:
 			i = 0
 			res, y, _ = kuudere.wrap(
 				body,
-				(380, 0),
+				(290, 0),
 				body_line,
 				data,
 				1,
-				(191, 191, 191)
+				(255, 255, 255)
 			)
 
 			if not self.chat_surface:
 				self.chat_surface = pygame.Surface(
-					(380, y),
+					(290, y),
 					pygame.SRCALPHA
 				)
 			else:
@@ -95,11 +95,11 @@ class Room:
 				i = surface_rect.height
 
 				# Update scroll
-				if i - 570 <= self.chat_scroll:
-					self.chat_scroll = max(0, i + y - 570)
+				if i - 155 <= self.chat_scroll:
+					self.chat_scroll = max(0, i + y - 155)
 
 				draft = pygame.Surface(
-					(380, i + y),
+					(290, i + y),
 					pygame.SRCALPHA
 				)
 				draft.blit(self.chat_surface, (0, 0))
@@ -121,10 +121,10 @@ class Room:
 
 					for addr in players:
 						if players[addr]:
-							n += 1
-
 							if n == i:
 								return addr, players[addr]
+
+							n += 1
 
 				return None, None
 			elif i in players:
@@ -167,7 +167,7 @@ class Room:
 
 		def update_player():
 			self.player_surface = pygame.Surface(
-				(200, len(players)*30),
+				(80, len(players)*20),
 				pygame.SRCALPHA
 			)
 
@@ -182,14 +182,14 @@ class Room:
 					rect = image.get_rect()
 
 					self.player_surface.blit(image,
-						(10, i*30 + 8)
+						(5, i*20 + 5)
 					)
 
 					pygame.draw.line(
 						self.player_surface,
 						(34, 34, 34),
-						(0, i*30 + 29),
-						(200, i*30 + 29)
+						(0, i*20 + 29),
+						(80, i*20 + 29)
 					)
 
 					i += 1
