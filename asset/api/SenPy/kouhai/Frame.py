@@ -11,11 +11,11 @@ def load(senpai, kouhai):
 			self.on, self.fire = moe()
 
 			prop = dict({
-				"rect": (0, 0, 100, 100),
+				"rect": (0, 0, 0, 0),
 				"zindex": 0,
 				"scale_pos": (0, 0),
 				"scale_size": (0, 0),
-				"active": True,
+				"active": 1,
 				"parent": None
 			}, **prop)
 
