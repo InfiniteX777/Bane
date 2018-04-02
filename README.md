@@ -1,4 +1,4 @@
-# Bane
+# Sparrow
 A chat room with sprinkles.
 
 # Features
@@ -23,6 +23,9 @@ A chat room with sprinkles.
 * Send files!
   * Just type '/send' in a room and a file chooser dialog will appear.
   * Everybody in that room will receive the file.
+
+* DU-DU-DU-DUEL!
+  * Fight people directly via '/duel [Invite Code]'!
 
 * Need help?
   * Type '/help' or '/commands' to see what you can do in the app!
