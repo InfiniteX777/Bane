@@ -36,12 +36,16 @@
 
 					stream.on("connected", connect)
 
-			.send(data)
+			.send(data, addr=None)
 				Sends a stream of data. Automatically converts
-				the data to a binary string.
+				the data to a binary string. If 'addr' is 'None',
+				will broadcast to all connected sockets.
 
 				Example;
-					stream.send("hello")
+					# Unicast
+					stream.send("hello", ('192.168.1.1', 6000))
+					# Broadcast
+					stream.send("hi")
 
 			.close()
 				Closes the stream.
@@ -89,10 +93,11 @@
 
 import socket, time, threading, re, math
 
-cache = {}
-timeout = 5
-eos = chr(1114111).encode("utf-8") # End of stream.
+cache = {} # Collection of all sockets.
+timeout = 5 # The time it takes for a connection to timeout.
+eos = chr(1114111).encode("utf-8") # End of stream indicator.
 
+# A persistent send function. Will attempt to send until successful.
 def send(conn, data):
 	while 1:
 		try:
@@ -442,6 +447,8 @@ def load(senpai):
 			self.close = close
 
 	class this:
+		__new__ = senpai.__new__
+
 		ip = socket.gethostbyname(socket.gethostname())
 
 		def stream(addr):
@@ -473,7 +480,5 @@ def load(senpai):
 
 			# Make a fresh list.
 			cache = {}
-
-	this.Stream = Stream
 
 	return this
