@@ -12,7 +12,7 @@
 	focus
 		Currently focused frame.
 
-	Frame(rect, zindex=0):
+	Frame(Dict prop={}):
 		Creates a frame that reacts to your mouse. These are
 		focus-able and only 1 can be focused at a time. Focus is
 		attained when clicking on a frame, while clicking on nothing
@@ -124,7 +124,7 @@
 			Called when a mouse button is pressed inside
 			the rectangle.
 
-	TextBox(rect, zindex=0) inherit Frame
+	TextBox(Dict prop={}) inherit Frame
 		Creates a textbox that accepts key inputs.
 
 		properties={
@@ -144,29 +144,12 @@
 
 import pygame, importlib
 
-class this:
-	pass
-
-# List of frames.
-this.list = {}
-# Hovered frames.
-this.hover = []
-# Top-most frame that contains the mouse point.
-this.target = None
-# Currently focused active frame (The last frame that you clicked).
-this.focus = None
 # Helps find the proper target.
 debounce = False
 
 def load(senpai):
 	moe = senpai.remote["moe"]
 	imouto = senpai.remote["imouto"]
-
-	def get(name):
-		return importlib.import_module(__package__ + "." + name).load(senpai, this)
-
-	this.Frame = get("Frame")
-	this.TextBox = get("TextBox")
 
 	def recursive(
 		list, # The parent's list.
@@ -236,27 +219,49 @@ def load(senpai):
 			v.fire("mousebuttonup", event)
 
 	def mousedown(event):
-		prev = this.focus
-		this.focus = this.target
+		# Mouse wheel motion does not affect focusing.
+		if event.button != 4 and event.button != 5:
+			prev = this.focus
+			this.focus = this.target
 
-		if this.target:
-			if this.target != prev:
-				if prev:
-					imouto.fire("unfocused", prev)
-					prev.fire("unfocused")
+			if this.target:
+				if this.target != prev:
+					if prev:
+						imouto.fire("unfocused", prev)
+						prev.fire("unfocused")
 
-				imouto.fire("focused", this.target)
-				this.target.fire("focused")
-		elif prev:
-			imouto.fire("unfocused", prev)
-			prev.fire("unfocused")
+					imouto.fire("focused", this.target)
+					this.target.fire("focused")
+			elif prev:
+				imouto.fire("unfocused", prev)
+				prev.fire("unfocused")
 
 		for v in this.hover:
 			v.fire("mousebuttondown", event)
 
-
 	imouto.on("mousemotion", mousemotion)
 	imouto.on("mousebuttonup", mouseup)
 	imouto.on("mousebuttondown", mousedown)
+
+	class this:
+		__new__ = senpai.__new__
+
+		# List of frames.
+		list = {}
+		# Hovered frames.
+		hover = []
+		# Top-most frame that contains the mouse point.
+		target = None
+		# Currently focused active frame (The last frame that you
+		# clicked).
+		focus = None
+
+	def get(name):
+		return importlib.import_module(
+			__package__ + "." + name
+		).load(senpai, this)
+
+	this.Frame = get("Frame")
+	this.TextBox = get("TextBox")
 
 	return this
