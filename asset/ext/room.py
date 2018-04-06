@@ -41,37 +41,47 @@ kuudere = senpai.remote["kuudere"]
 body = kuudere.get("calibri", 12, False)
 body_line = body.get_linesize()
 
+# The server.
 server = None
+# Cache responsible to log all existing rooms with at least 1 player.
 cache = ""
-
-def set_server(v):
-	global server
-	server = v
 
 class Room:
 	def __init__(self, room, name="Untitled Room"):
 		global server, body, body_line, cache
+		# Players in this room.
 		players = {}
+		# Chat history log.
 		chats = []
+		# The room's unique ID.
 		id = "\\" + room + "\\" + name
 
+		# Rename the room. Should not be mistaken for the room's 'code'.
 		def rename(name):
 			nonlocal id, room
 			global cache
 
+			# Change name.
 			self.name = name
+			# Reformat ID.
 			prev = id
 			id = "\\" + room + "\\" + name
 
 			if prev in cache:
+				# Replace the registry in the cache.
 				i = cache.index(prev)
 				cache = cache[:i] + id + cache[i+len(prev):]
 
+		# Send data to all the players in this room. 'nonserver' means
+		# that if it should also send data to 'dedicated servers',
+		# a proxy that is supposed to act as an anchor to keep a giant
+		# chunk of data alive.
 		def broadcast(data, nonserver=0):
 			for addr in players:
 				if addr != server.addr and (not nonserver or players[addr]):
 					server.send(data, addr)
 
+		# Write text on this room's chat log.
 		def chat(data):
 			chats.append(data)
 
@@ -86,15 +96,17 @@ class Room:
 			)
 
 			if not self.chat_surface:
+				# First time to chat.
 				self.chat_surface = pygame.Surface(
 					(290, y),
 					pygame.SRCALPHA
 				)
 			else:
+				# Resize the chat log's image.
 				surface_rect = self.chat_surface.get_rect()
 				i = surface_rect.height
 
-				# Update scroll
+				# Update scroll.
 				if i - 155 <= self.chat_scroll:
 					self.chat_scroll = max(0, i + y - 155)
 
@@ -106,6 +118,7 @@ class Room:
 
 				self.chat_surface = draft
 
+			# Draw the text into the chat log.
 			for image in res:
 				rect = image.get_rect()
 				self.chat_surface.blit(image,
@@ -114,6 +127,9 @@ class Room:
 
 				i += body_line
 
+		# If 'i' is an integer, get the corresponding player's address
+		# and name based on 'i' as the index. If i is an address,
+		# get the player's name based on the address.
 		def get(i):
 			if type(i) == int:
 				if i < len(players):
@@ -130,35 +146,57 @@ class Room:
 			elif i in players:
 				return players[i]
 
+		# If player is in the room. '.get()' also works as it returns
+		# something if the player is in the room, but since
+		# dedicated servers has an empty string as their name, it will
+		# return 'False' when used in conditional statements.
 		def has(addr):
-			v = addr in players
+			return addr in players
 
-			return v
-
+		# Add the player in the room with its coressponding name.
 		def add(addr, name):
 			global cache
 
 			if addr not in players:
-				if room[0] != "0" and room != "global" and not len(players) and addr == server.addr:
+				if (room[0] != "0" and
+					room != "global" and
+					not len(players) and
+					addr == server.addr):
+					# Room finally has a player. Add it to the cache.
 					cache += id
 
-				self.players += "\\" + socket_encoder.encode(addr, 0) + "\\" + name
+				# Add player data in a string. Used for sending data.
+				# This keeps the data ready instead of always
+				# iterating through the dictionary.
+				self.players += (
+					"\\" + socket_encoder.encode(addr, 0) +
+					"\\" + name
+				)
 
+				# Add player in a dictionary. Used for fast searching.
 				players[addr] = name
 
+		# Remove player from the room.
 		def rem(addr):
 			global cache
 
 			if addr in players:
 				tag = socket_encoder.encode(addr, 0)
 				n = "\\" + tag + "\\" + players[addr]
+				# Clear player data from the string.
 				i = self.players.find(n)
-				self.players = self.players[:i] + self.players[i+len(n):]
+				self.players = (
+					self.players[:i] +
+					self.players[i+len(n):]
+				)
 
 				del players[addr]
 
 				if addr == server.addr:
+					# It was you who left the room.
 					if id in cache:
+						# Since you don't own the room anymore,
+						# remove from the cache.
 						i = cache.index(id)
 						cache = cache[:i] + cache[i+len(id):]
 				elif len(players) and list(players)[0] == server.addr:
