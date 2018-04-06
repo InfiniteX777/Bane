@@ -1,5 +1,12 @@
 import random
 
+# State at which the game is still processing 'drawing cards'.
+# This helps preserve the streamlining, as some data may end up
+# being sent first.
+drawing = 0
+# This is for collecting callbacks, where all will be fired as soon
+# as the 'drawing' state is back to 0.
+drawing_queue = []
 info = {
 	"stun": [
 		"Shuffle the opponent's cards on their hand.",
@@ -30,6 +37,16 @@ info = {
 		"For this turn, Any card on the attacking card's position will be revealed."
 	]
 }
+
+# Wait for 'drawing' state to end. Will fire immediately if it is not
+# drawing.
+def wait(callback, tuple):
+	global drawing, drawing_queue
+
+	if drawing:
+		drawing_queue.append((callback, tuple))
+	else:
+		callback(*tuple)
 
 # Default attack pattern.
 def hit(handY, pos):
@@ -63,33 +80,67 @@ def hit(handY, pos):
 
 	return l
 
-# Redraw from deck. Strictly bottom-side only.
-def redraw(deck, hand, l):
+# Draw from deck. Strictly bottom-side only.
+def draw(deck, hand, l):
+	global drawing, drawing_queue
+	# Increment state. This tells the system that you are going to
+	# need some time to process it.
+	drawing += 1
+
 	for i in l:
-		if not deck:
-			break # Empty deck.
+		if deck:
+			hand[1][i]["color"] = random.randint(0, 5)
+			hand[1][i]["type"] = random.randint(0, 1)
+			hand[1][i]["effect"] = deck.pop()
+		else:
+			# Empty deck. Replace with emply slot instead.
+			hand[1][i]["effect"] = ""
 
-		hand[1][i]["color"] = random.randint(0, 5)
-		hand[1][i]["type"] = random.randint(0, 1)
-		hand[1][i]["effect"] = deck.pop()
+	if deck:
+		# No need to re-arrange since your hand must be full at
+		# all times.
+		return
 
-''' deck = Bottom side's deck.
-	hand = Both players' cards on their hand.
-	a = Position of card A.
-	b = Position of card B.
+	l = [] # Re-use the array.
 
-	*A and B are not on the same side.*
-'''
+	# Collect all cards with effects (All cards should have an
+	# effect. This means that if there is no effect, it must
+	# be an empty slot.)
+	for card in hand[1]:
+		if card["effect"]:
+			l.append((
+				card["color"],
+				card["type"],
+				card["effect"]
+			))
+
+			card["effect"] = ""
+
+	# Iterate through the array, respectively
+	# (color, type, effect).
+	for i in range(len(l)):
+		hand[1][i]["color"], hand[1][i]["type"], hand[1][i]["effect"] = l[i]
+
+	# Decrement state.
+	drawing -= 1
+
+	if not drawing and drawing_queue:
+		l = drawing_queue.copy()
+		drawing_queue = []
+
+		for callback, tuple in l:
+			callback(*tuple)
+
+# deck = Bottom side's deck.
+# hand = Both players' cards on their hand.
 
 # An attacking card on the attacker's persepective.
-# Handles redrawing.
 # A attacks B.
 class attack_atk:
 	def __new__(self):
 		raise Exception("Cannot instantiate this class.")
 
 # An attacking card on the defender's perspective.
-# Does not handle redrawing.
 # B attacks A.
 class attack_def:
 	def __new__(self):
@@ -106,6 +157,8 @@ class attack_def:
 					card["effect"]
 				))
 
+				card["effect"] = ""
+
 		random.shuffle(list)
 
 		for i in range(len(list)):
@@ -115,6 +168,8 @@ class attack_def:
 		for card in hand[1]:
 			if card["effect"]:
 				deck.append(card["effect"])
+
+				card["effect"] = ""
 
 		for card in hand[1]:
 			if not deck:
@@ -126,13 +181,13 @@ class attack_def:
 
 	def paint(deck, hand):
 		for card in hand[1]:
-			card["color"] = random.randint(0, 5)
+			if card["effect"]:
+				card["color"] = random.randint(0, 5)
 
 	def chaos(deck, hand):
-		redraw(deck, hand, range(6))
+		draw(deck, hand, range(6))
 
 # A defending card on the attacker's perspective.
-# Handles redrawing.
 # A attacks B.
 class defend_atk:
 	def __new__(self):
@@ -149,18 +204,19 @@ class defend_atk:
 					card["effect"]
 				))
 
+				card["effect"] = ""
+
 		random.shuffle(list)
 
-		for i in range(6):
-			if list:
-				hand[1][i]["color"], hand[1][i]["type"], hand[1][i]["effect"] = list[i]
-			else:
-				hand[1][i]["effect"] = ""
+		for i in range(len(list)):
+			hand[1][i]["color"], hand[1][i]["type"], hand[1][i]["effect"] = list[i]
 
 	def reset(deck, hand):
 		for card in hand[1]:
 			if card["effect"]:
 				deck.append(card["effect"])
+
+				card["effect"] = ""
 
 		random.shuffle(deck)
 
@@ -174,10 +230,11 @@ class defend_atk:
 
 	def paint(deck, hand):
 		for card in hand[1]:
-			card["color"] = random.randint(0, 5)
+			if card["effect"]:
+				card["color"] = random.randint(0, 5)
 
 	def chaos(deck, hand):
-		redraw(deck, hand, range(6))
+		draw(deck, hand, range(6))
 
 # A defending card on the defender's perspective.
 # B attacks A.
