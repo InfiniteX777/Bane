@@ -6,9 +6,10 @@
 			Request attack card A with card B.
 
 		8[lose]
-			If [lose] has no value (None), change turn. If [lose] is
-			set to 1, send same protocol with [lose] value of 0 if
-			winner, otherwise value of 1 for stalemate.
+			If [lose] has no value (None), change turn. If [lose] has
+			a value of 1 (opponent has no more cards), send same
+			protocol with [lose] value of 0 (you still have cards; you
+			win) or 1 (you don't have cards left; stalemate).
 
 		9[turn][eos]
 			Request 'virtual coin flip'. Both ends will send the same
@@ -16,7 +17,7 @@
 			The [turn] value determines the receiver's turn. The [eos]
 			determines the end of session.
 '''
-import random, pygame
+import random, pygame, threading
 import asset.ext.game_res as game_res
 
 # Seed the RNG.
@@ -34,6 +35,7 @@ body = kuudere.get("calibri", 14, False)
 body_line = body.get_linesize()
 body_big = kuudere.get("segoe ui", 24, False)
 body_big_bold = kuudere.get("calibri", 24, True)
+body_huge = kuudere.get("segoe ui", 48, False)
 
 # Image
 img_btn = pygame.image.load("asset/img/turn_button.png")
@@ -97,6 +99,10 @@ for v in list((
 	)
 
 # If the game is in progress or not.
+# 0 = No game in-progress.
+# 1 = In-game.
+# 'string' = Post-game. This will pose as the text in the middle
+# of the screen.
 active = 0
 # Turn. Attack. Swap.
 trn, atk, swp = 0, 0, 0
@@ -115,12 +121,22 @@ drag = target = None
 # Desired mouse position and current mouse position.
 mouse = mouse_delta = (0, 0)
 
-# Send your cards' data.
+# Send your cards' data. Also send if you don't have cards left (deck
+# and hand). This will tell if you win, lose, or stalemate.
 def send_hand():
 	global server, opponent
+	# Data to be sent.
 	v = ""
+	# Number of cards.
+	n = len(deck)
 
 	for i in range(6):
+		# Collect cards with effects. All cards should have an effect,
+		# otherwise it's an empty slot.
+		if hand[1][i]["effect"]:
+			n += 1
+
+		# Append data.
 		v += "_" + (
 			str(i) + # Position
 			str(hand[1][i]["color"]) + # Color
@@ -130,9 +146,15 @@ def send_hand():
 
 	server.send("6" + v[1:], opponent)
 
+	if not n:
+		# Tell him you don't have any cards left.
+		global active
+		active = 2 # Set to post-game mode.
+		server.send("81", opponent)
+
 # Data sent from your opponent.
 def received(addr, i, data):
-	global deck, hand, trn, atk, swp
+	global deck, hand, trn, atk, swp, active, active, opponent
 
 	if i == 6: # Card Change
 		for v in data.split("_"):
@@ -144,15 +166,15 @@ def received(addr, i, data):
 			except:
 				pass
 	elif i == 7: # Attack
-		# Redraw > Attacker's effect > Defender's effect
+		# Draw > Attacker's effect > Defender's effect
 		try:
 			a, b = int(data[0]), int(data[1])
 
 			aa, ab = hand[1][a]["type"], hand[1][a]["effect"]
 			ba, bb = hand[0][b]["type"], hand[0][b]["effect"]
 
-			# Redraw.
-			game_res.redraw(
+			# Draw.
+			game_res.draw(
 				deck,
 				hand,
 				game_res.hit(hand[1], a)
@@ -180,10 +202,53 @@ def received(addr, i, data):
 		except:
 			pass
 	elif i == 8: # End Turn
-		trn = atk = swp = 1
-	elif i == 9: # Flip Coin
-		global active, opponent
+		# Check if a data was sent.
+		if data:
+			def callback(addr, data):
+				global deck, hand, active, server, threading
+				# Received additional data (A request to end the game. 
+				# Either out of cards, disconnection, or conceded).
+				data = int(data)
+				# Count how many cards you got.
+				n = len(deck)
 
+				for card in hand[1]:
+					if card["effect"]:
+						# We only need to know if we still have at
+						# least 1 card on our hand, so we break
+						# immediately.
+						n += 1
+						break
+
+				# Tell him if you still have cards.
+				if type(active) != str:
+					# Tell him if you still have cards.
+					server.send("8" + (n and "0" or "1"), addr)
+
+				# Re-check the data again. This time, check if it has
+				# a value of 1.
+				if data:
+					# Opponent is out of cards or conceded.
+					active = n and "You won!" or "Stalemate!"
+
+				else:
+					# Opponent still has cards.
+					active = n and "Stalemate!" or "You lost!"
+
+			game_res.wait(callback, (addr, data))
+
+			def wait():
+				global active
+				active = 0
+
+			threading.Timer(
+				3,
+				wait
+			).start()
+		else:
+			# End turn.
+			trn = atk = swp = 1
+	elif i == 9: # Flip Coin
 		# Make sure that you are not in a game.
 		if not active:
 			# 2nd request.
@@ -238,8 +303,7 @@ def mousebuttonup(event):
 		# Reset 'end turn' button.
 		btn_state = 0
 
-		# Check if player is dragging a card towards another
-		# card.
+		# Check if player is dragging a card towards another card.
 		if target and drag:
 			if target[0]:
 				# Target is on the same side. Swap.
@@ -248,8 +312,8 @@ def mousebuttonup(event):
 				if swp:
 					swp -= 1
 					# Get the cards.
-					a = hand[drag[0]][drag[1]]
-					b = hand[target[0]][target[1]]
+					a = hand[1][drag[1]]
+					b = hand[1][target[1]]
 
 					# Get values.
 					aa = a["color"]
@@ -269,14 +333,18 @@ def mousebuttonup(event):
 					b["type"] = ab
 					b["effect"] = ac
 					b["pos_delta"][0] = ax - bx
+
+					send_hand()
 			elif atk:
 				# Target is on the opposite side. Attack.
 				atk -= 1
 
-				aa, ab = hand[0][drag[1]]["type"], hand[0][drag[1]]["effect"]
-				ba, bb = hand[1][target[1]]["type"], hand[1][target[1]]["effect"]
+				aa = hand[1][drag[1]]["type"]
+				ab = hand[1][drag[1]]["effect"]
+				ba = hand[0][target[1]]["type"]
+				bb = hand[0][target[1]]["effect"]
 
-				game_res.redraw(deck, hand, [drag[1]])
+				game_res.draw(deck, hand, [drag[1]])
 
 				if not aa:
 					func = getattr(game_res.attack_atk, ab, None)
@@ -285,7 +353,7 @@ def mousebuttonup(event):
 						func(deck, hand)
 
 				if ba:
-					func = getattr(game_res.attack_def, bb, None)
+					func = getattr(game_res.defend_atk, bb, None)
 
 					if func:
 						func(deck, hand)
@@ -380,33 +448,33 @@ for y in range(2):
 							image,
 							(10, 10)
 						)
-				else:
+				elif ((card["flip"] - y) and
+					  card["effect"] in game_res.info):
 					card["pos"][1] = y and -20 or 20
-					if (card["flip"] - y) and card["effect"] in game_res.info:
-						res, height, _ = kuudere.wrap(
-							body,
-							(390, 0),
-							body_line,
-							game_res.info[card["effect"]][card["type"]],
-							1,
-							(255, 255, 255)
+					res, height, _ = kuudere.wrap(
+						body,
+						(390, 0),
+						body_line,
+						game_res.info[card["effect"]][card["type"]],
+						1,
+						(255, 255, 255)
+					)
+
+					info_surface = pygame.Surface(
+						(400, height + 5),
+						pygame.SRCALPHA
+					)
+
+					info_surface.fill((0, 0, 0, 191))
+
+					i = 0
+					for image in res:
+						info_surface.blit(
+							image,
+							((400 - image.get_rect().width)/2, i + 5)
 						)
 
-						info_surface = pygame.Surface(
-							(400, height + 5),
-							pygame.SRCALPHA
-						)
-
-						info_surface.fill((0, 0, 0, 191))
-
-						i = 0
-						for image in res:
-							info_surface.blit(
-								image,
-								((400 - image.get_rect().width)/2, i + 5)
-							)
-
-							i += body_line
+						i += body_line
 
 			frame.on("mouseenter", mouseenter)
 
@@ -430,7 +498,18 @@ for y in range(2):
 def draw():
 	global active, info_surface
 
-	if active:
+	if type(active) == str:
+		# Post-game.
+		image = body_huge.render(active, True, (255, 255, 255))
+		rect = image.get_rect()
+
+		# Draw the result of the game.
+		imouto.screen.blit(image, (
+			400 - rect.width/2,
+			300 - rect.height/2
+		))
+	elif active:
+		# Game in-progress.
 		global trn, btn_state, atk
 		image = body_big.render(str(len(deck)), True, (255, 255, 255))
 		rect = image.get_rect()
@@ -478,43 +557,47 @@ def draw():
 					card["pos_delta"][1] + pos[1]
 				)
 
-				if (card["flip"] - i):
-					# Faced up.
+				if card["effect"]:
+					if (card["flip"] - i):
+						# Faced up.
 
-					# Draw the card.
-					imouto.screen.blit(img_card, pos, (
-						card["color"]*90, 0,
-						90, 120
-					))
+						# Draw the card.
+						imouto.screen.blit(img_card, pos, (
+							card["color"]*90, 0,
+							90, 120
+						))
 
-					# Card type. Bottom-left.
-					imouto.screen.blit(img_card_type, (
-						pos[0] + 10,
-						pos[1] + 94
-					), (
-						card["type"]*16, 0,
-						16, 16
-					))
+						# Card type. Bottom-left.
+						imouto.screen.blit(img_card_type, (
+							pos[0] + 10,
+							pos[1] + 94
+						), (
+							card["type"]*16, 0,
+							16, 16
+						))
 
-					# Card effect icon. Center.
-					if card["effect"] in img_card_effect:
-						imouto.screen.blit(
-							img_card_effect[card["effect"]],
-							(pos[0] + 21, pos[1] + 36)
-						)
-				else:
-					# Faced down.
-					imouto.screen.blit(img_card, pos, (
-						540, 0,
-						90, 120
-					))
+						# Card effect icon. Center.
+						if card["effect"] in img_card_effect:
+							imouto.screen.blit(
+								img_card_effect[card["effect"]],
+								(pos[0] + 21, pos[1] + 36)
+							)
+					else:
+						# Faced down.
+						imouto.screen.blit(img_card, pos, (
+							540, 0,
+							90, 120
+						))
 
 		if drag:
 			global target, mouse, mouse_delta
 			a = hand[drag[0]][drag[1]]
 
 			center = a["frame"].properties["rect"].center
-			v = target and hand[target[0]][target[1]]["frame"].properties["rect"].center or mouse
+			v = (target and
+				hand[target[0]][target[1]]["frame"].properties["rect"].center or
+				mouse
+			)
 			mouse_delta = (tsundere.lerp(
 				v[0], mouse_delta[0],
 				0.4, 1
@@ -578,7 +661,7 @@ def start():
 			card["frame"].properties["active"] = 1
 
 			# Check if it's your hand.
-			if i:
+			if i and deck:
 				# Draw a card.
 				card["color"] = random.randint(0, 5)
 				card["type"] = random.randint(0, 1)
