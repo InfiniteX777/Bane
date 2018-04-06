@@ -84,8 +84,8 @@ room_id = 1
 name = ""
 
 # Set servers to the other modules.
-game.server, game.code = server, code
-room.set_server(server)
+game.server = room.server = server
+game.code = code
 
 # Set background color.
 imouto.background = (63, 63, 63)
@@ -670,21 +670,32 @@ def set_name(v):
 
 # Listeners
 
+# Connected to a user.
 def success(addr):
-	# Successfully connected to a server.
 	global name, rooms, code2
 
+	# Tell him who you are connected with.
 	server.send("1global" + rooms["global"].players, addr)
 
+	# See if there are custom rooms that you can tell him.
 	if room.cache:
+		# Get rid of the 'ghost byte'. It's only for aesthetics.
 		cache = room.cache[1:]
+
+		# Send him what custom rooms you know.
 		server.send("3" + cache, addr)
 
 		i = 0
+		# Get each of the room's names. This is different from
+		# the room's 'code', where the 'name' is not a unique ID.
 		for v in cache.split("\\"):
+			# Format the data.
 			i = (i+1)%2
 
 			if i:
+				# Give him your ID to tell him that you own these
+				# rooms. He'll need to know at least 1 person
+				# so someone can verify the password.
 				server.send(
 					"1" + v + "\\" + code2 + "\\" + name,
 					addr
@@ -693,44 +704,60 @@ def success(addr):
 server.on("success", success)
 server.on("connected", success)
 
+# A user disconnected from you. This doesn't necessarily mean that
+# he disconnected from the other users. Each user has an independent
+# connection between users.
 def disconnected(addr):
 	global rooms
 	i = socket_encoder.encode(addr, 0)
 
+	# Check if you are in a game with him.
+	if game.active and game.opponent == addr:
+		# LUL RAGE QUIT NUB
+		game.received(addr, 8, "1")
+
+	# Disconnect him to all of the rooms that he is in.
 	for k in rooms:
 		if rooms[k].has(addr):
+			# Get his name.
 			v = rooms[k].get(addr)
-			rooms[k].chat(
-				v and (
-					"'" + rooms[k].get(addr) +
-					"' has disconnected."
-				) or (
-					"Disconnected from dedicated server '" +
-					str(addr) + "'."
-				)
-			)
 
+			# Post a chat text.
+			rooms[k].chat(v and (
+				"'" + rooms[k].get(addr) +
+				"' has disconnected."
+			) or (
+				"Disconnected from dedicated server '" +
+				str(addr) + "'."
+			))
+
+		# Get rid of him.
 		rooms[k].rem(addr)
+		# Redraw the room's image.
 		rooms[k].update()
 
 server.on("disconnected", disconnected)
 
+# Data received. See the topmost portion of this module for more info.
 def received(addr, data):
 	global name, code
 
 	try:
+		# Try to transform the first byte into an integer.
 		i = int(data[:1].decode("utf-8"))
 		data = data[1:]
 	except:
+		# First byte isn't an integer. Protocol is not followed
+		# properly. Do not continue.
 		return
 
 	if i != 5:
+		# Files should remain in byte-string for easier translation.
 		data = data.decode("utf-8")
 
 	if i > 5 and (game.opponent == addr or i == 9):
-		game.received(addr, int(i), data)
-
-		return
+		# Protocol related to the game. Let 'game.py' handle it.
+		return game.received(addr, i, data)
 
 	if i == 0: # Data Chat
 		sep = data.index("\\")
