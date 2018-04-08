@@ -19,6 +19,7 @@
 '''
 import random, pygame, threading
 import asset.ext.game_res as game_res
+import asset.ext.window as window
 
 # Seed the RNG.
 random.seed()
@@ -153,7 +154,7 @@ def send_hand():
 		server.send("81", opponent)
 
 # Data sent from your opponent.
-def received(addr, i, data):
+def received(addr, i, data, name=""):
 	global deck, hand, trn, atk, swp, active, active, opponent
 
 	if i == 6: # Card Change
@@ -204,38 +205,33 @@ def received(addr, i, data):
 	elif i == 8: # End Turn
 		# Check if a data was sent.
 		if data:
-			def callback(addr, data):
-				global deck, hand, active, server, threading
-				# Received additional data (A request to end the game. 
-				# Either out of cards, disconnection, or conceded).
-				data = int(data)
-				# Count how many cards you got.
-				n = len(deck)
+			# Received additional data (A request to end the game. 
+			# Either out of cards, disconnection, or conceded).
+			data = int(data)
+			# Count how many cards you got.
+			n = len(deck)
 
-				for card in hand[1]:
-					if card["effect"]:
-						# We only need to know if we still have at
-						# least 1 card on our hand, so we break
-						# immediately.
-						n += 1
-						break
+			for card in hand[1]:
+				if card["effect"]:
+					# We only need to know if we still have at
+					# least 1 card on our hand, so we break
+					# immediately.
+					n += 1
+					break
 
+			# Tell him if you still have cards.
+			if type(active) != str:
 				# Tell him if you still have cards.
-				if type(active) != str:
-					# Tell him if you still have cards.
-					server.send("8" + (n and "0" or "1"), addr)
+				server.send("8" + (n and "0" or "1"), addr)
 
-				# Re-check the data again. This time, check if it has
-				# a value of 1.
-				if data:
-					# Opponent is out of cards or conceded.
-					active = n and "You won!" or "Stalemate!"
-
-				else:
-					# Opponent still has cards.
-					active = n and "Stalemate!" or "You lost!"
-
-			game_res.wait(callback, (addr, data))
+			# Re-check the data again. This time, check if it has
+			# a value of 1.
+			if data:
+				# Opponent is out of cards or conceded.
+				active = n and "You won!" or "Stalemate!"
+			else:
+				# Opponent still has cards.
+				active = n and "Stalemate!" or "You lost!"
 
 			def wait():
 				global active
@@ -254,7 +250,6 @@ def received(addr, i, data):
 			# 2nd request.
 			if data:
 				trn, atk, swp = int(data[0]), 0, 1
-
 				opponent = addr
 
 				if not data[2:]:
@@ -265,18 +260,36 @@ def received(addr, i, data):
 
 				start() # DU-DU-DU-DU-DUEL!
 			# 1st request.
-			elif random.random() < 0.5:
-				# You get 1st turn.
-				trn, atk, swp = 1, 0, 1
-
-				server.send("90", addr)
 			else:
-				# Your opponent gets 1st turn.
-				trn = 0
+				# 1st request. Make a window prompt so the user has
+				# a psuedo-consent with the duel.
+				def callback(choice, win):
+					if choice:
+						# Accepted.
+						global trn, atk, swp, server, opponent
+						nonlocal addr
+						opponent = addr
 
-				server.send("91", addr)
+						if random.random() < 0.5:
+							# You get 1st turn.
+							trn, atk, swp = 1, 0, 1
 
-			opponent = addr
+							server.send("90", addr)
+						else:
+							# Your opponent gets 1st turn.
+							trn = 0
+
+							server.send("91", addr)
+
+					# Destroy after the user has chosen their decision.
+					win.destroy()
+
+				win = window.Window(
+					"It's time to du-du-du-duel!",
+					"Player '" + name +
+					"' would like to have a duel with you!",
+					callback
+				)
 
 def mousemotion(event):
 	global drag
@@ -409,9 +422,9 @@ for y in range(2):
 
 			def mousebuttondown(event):
 				global trn
+				nonlocal card
 
-				if event.button == 1 and y and trn:
-					nonlocal card
+				if event.button == 1 and y and trn and card["effect"]:
 					global drag, mouse, mouse_delta, info_surface
 					drag = (y, x)
 					mouse = mouse_delta = event.pos
@@ -429,7 +442,8 @@ for y in range(2):
 					if (y and not swp) or (not y and not atk):
 						return
 
-					if hand[drag[0]][drag[1]] != card:
+					if (hand[drag[0]][drag[1]] != card and
+						card["effect"]):
 						global target
 						target = (y, x)
 						image = body_big_bold.render(
