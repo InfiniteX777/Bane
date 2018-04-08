@@ -26,6 +26,7 @@ def load():
 
 	for v in list((
 		"moe", # Event Creator
+		#"sensei", # Class Creator
 		"tsundere", # Miscellaneous
 		"imouto", # Game Interface
 		"ahoge", # Network Interface
