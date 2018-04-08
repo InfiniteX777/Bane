@@ -14,7 +14,7 @@
 			132yvqix8dc0
 
 		name = The given name by the client when connecting.
-			This is given the client itself.
+			This is given by the client itself.
 
 	Room Protocol
 		global = Global Room
@@ -22,33 +22,66 @@
 		[1 to ...][code] = Multi-User Room
 
 	Data Protocol
+		These define the format of the data that the system will
+		only accept. If any data sent does not comply to this format,
+		it will not be processed.
+
 		0[room]\[text]
 			A chat message to be added in a room. Does nothing
 			if the room doesn't exist.
 
+			0132yvqix8dc0\Hello
+				A chat message containing 'Hello' to a room
+				with an ID of '1' and code of '32yvqix8dc0'.
+
 		1[room]\[addr1]\[name1]\[addr2]\[name2]...
 			A list of players to be added to a room. This will also
-			creates a room if it doesn't exist.
+			create a room if it doesn't exist.
+
+			1132yvqix8dc0\32yvqix8dc0\Bob\32yvqix8dc1\Ross
+				A player list containing player '32yvqix8dc0' with
+				the name of 'Bob' and '32yvqix8dc1' with the name of
+				'Ross'. To be added to a room with an ID of '1' and
+				code of '32yvqix8dc0'.
 
 		2[room]\[addr1]\[name1]\[addr2]\[name2]...
 			A list of players to be removed from a room. Does nothing
 			if the room doesn't exist.
 
+			DEPRECATED. DO NOT USE.
+
 		3[room1]\[name1]\[room2]\[name2]...
 			A request to create a room with the specified id and name.
 
+			3132yvqix8dc0\Room_of_Bob\132yvqix8dc1\Room_of_Ross
+				A room list containing room '132yvqix8dc0' with the
+				name of 'Room_of_Bob' and room '132yvqix8dc1' with the
+				name of 'Room_of_Ross'. If any of these rooms already
+				exist in your room list, it will rename these rooms.
+
 		4[room]\[password]
-			A request to join a private room. [name] is the
-			requester's name.
+			A request to join a private room.
+
+			4132yvqix8dc0\12345
+				A join request to the room with an ID of '1' and
+				code of '32yvqix8dc0'. The password '12345' will
+				be checked if it matches with the password that you
+				know.
 
 		5[name]\[file]
 			A file transfered. The name also includes the
-			extension.
+			extension. File automatically transfers to the
+			'download' folder.
+
+			5bob.txt\Hello There
+				A file data with the name of 'bob.txt' containing
+				'Hello There'.
 '''
 import pygame, re, math, tkinter, os, threading, time
 import asset.ext.socket_encoder as socket_encoder
 import asset.ext.room as room
 import asset.ext.game as game
+import asset.ext.window as window
 from tkinter import filedialog
 
 # Hide tkinter window.
@@ -73,8 +106,8 @@ img_rooms = pygame.image.load("asset/img/rooms.png")
 img_lock = pygame.image.load("asset/img/lock.png")
 
 # Server Init
-server = ahoge.stream((ahoge.ip, 0))
-code = socket_encoder.encode(server.addr)
+server = game.server = room.server = ahoge.stream((ahoge.ip, 0))
+code = game.code = socket_encoder.encode(server.addr)
 code2 = socket_encoder.encode(server.addr, 0)
 selected_room = "global"
 rooms = {
@@ -82,10 +115,6 @@ rooms = {
 }
 room_id = 1
 name = ""
-
-# Set servers to the other modules.
-game.server = room.server = server
-game.code = code
 
 # Set background color.
 imouto.background = (63, 63, 63)
@@ -623,7 +652,10 @@ chatbox_keyinput(None)
 chatbox_textbox.on("keyinput", chatbox_keyinput)
 
 
-# Info Surface (Top-left Corner)
+''' Info Surface (Top-left Corner)
+	This contains all the information that you might need.
+	Contains name, IP address, and code.
+'''
 
 surface_info = pygame.Surface(
 	(140, 60),
@@ -648,8 +680,9 @@ surface_info.blit(
 	(5, 25)
 )
 
+# This is used by 'interface_name.py' to pass the user's input.
 def set_name(v):
-	global code, room, server, name
+	global rooms, server, name
 
 	# Set name.
 	name = v
@@ -757,7 +790,12 @@ def received(addr, data):
 
 	if i > 5 and (game.opponent == addr or i == 9):
 		# Protocol related to the game. Let 'game.py' handle it.
-		return game.received(addr, i, data)
+
+		if not rooms["global"].has(addr):
+			# You're not properly connected with him.
+			return
+
+		return game.received(addr, i, data, rooms["global"].get(addr))
 
 	if i == 0: # Data Chat
 		sep = data.index("\\")
