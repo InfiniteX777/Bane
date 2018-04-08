@@ -183,10 +183,8 @@ def load(senpai):
 									).start()
 
 									print(
-										"ahoge.py > Connection" +
-										"\nTarget: " + str(addr) +
-										"\nEcho: " + str(data) +
-										"\n"
+										"Connection " + str(addr) +
+										" | Echo: " + str(data)
 									)
 								else:
 									# Client-side.
@@ -199,24 +197,19 @@ def load(senpai):
 										target=fire,
 										args=("success", addr)
 									).start()
-									print(
-										"ahoge.py > Success" +
-										"\nTarget: " + str(addr) +
-										"\n"
-									)
+									print("Success " + str(addr))
 
 								reply = 0
 							else:
 								# Data received.
-								print(
-									"ahoge.py > Receiving" +
-									"\nTarget: " + str(addr) +
-									"\nPayload: " + str(len(data))
+								v = (
+									"Receiving " + str(addr) +
+									" | Payload: " + str(len(data))
 								)
 
 								if clients[addr]["header"]:
 									# Receiving data.
-									print("Type: Data\n")
+									print(v + " | Type: Data")
 
 									header = clients[addr]["header"]
 									segment = clients[addr]["data"][header[0]]
@@ -230,7 +223,7 @@ def load(senpai):
 									clients[addr]["header"] = None
 								else:
 									# Receiving header.
-									print("Type: Header\n")
+									print(v + " | Type: Header")
 
 									data = data.decode("utf-8")
 									data = data.split("\\")
@@ -242,30 +235,18 @@ def load(senpai):
 						break
 
 				if reply == -1:
-					print(
-						"ahoge.py > Timeout" +
-						"\nTarget: " + str(addr) +
-						"\n"
-					)
+					print("Timeout " + str(addr))
 					fire("timeout", addr)
 				elif reply:
 					if addr in clients:
 						del clients[addr]
 
-					print(
-						"ahoge.py > Failed" +
-						"\nTarget: " + str(addr) +
-						"\n"
-					)
+					print("Failed " + str(addr))
 					fire("failed", addr)
 				else:
 					del clients[addr]
 
-					print(
-						"ahoge.py > Disconnection" +
-						"\nTarget: " + str(addr) +
-						"\n"
-					)
+					print("Disconnection " + str(addr))
 					fire("disconnected", addr)
 
 				conn.close()
@@ -286,7 +267,7 @@ def load(senpai):
 					except:
 						break
 
-				print("ahoge.py > Closed\n")
+				print("Server Closed")
 				fire("closed")
 
 			threading.Thread(target=accept).start()
@@ -294,16 +275,13 @@ def load(senpai):
 			# Receiver Loop
 
 			def connect(addr):
-				print(
-					"ahoge.py > Connecting..." +
-					"\nTarget: " + str(addr)
-				)
+				v = "Connecting " + str(addr)
 
 				if addr in clients or addr == self.addr:
-					print("Status: Exists\n")
+					print(v + " | Status: Exists")
 					return True
 
-				print("Status: Connecting\n")
+				print(v + " | Status: Connecting")
 
 				try:
 					conn = socket.socket(
@@ -370,7 +348,7 @@ def load(senpai):
 
 							return
 
-						print("Payload: " + str(len(data)))
+						print(header.decode("utf-8") + str(len(data)))
 
 						if not data:
 							del sessions[(addr, id)]
@@ -416,11 +394,10 @@ def load(senpai):
 					sessions[(addr, id)] = [header, 0, buffer, data]
 
 					print(
-						"ahoge.py > Session" +
-						"\nTarget: " + str(addr) +
-						"\nBuffer: " + str(buffer) +
-						"\nHeader: " + str(header) +
-						"\nPayload: " + str(len(data))
+						"Session " + str(addr) +
+						" | Buffer: " + str(buffer) +
+						" | Header: " + str(header) +
+						" | Payload: " + str(len(data))
 					)
 
 					if len(sessions) <= 1:
