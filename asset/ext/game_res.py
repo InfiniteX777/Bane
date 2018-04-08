@@ -140,6 +140,9 @@ class attack_atk:
 	def __new__(self):
 		raise Exception("Cannot instantiate this class.")
 
+	def chaos(deck, hand):
+		draw(deck, hand, range(6))
+
 # An attacking card on the defender's perspective.
 # B attacks A.
 class attack_def:
@@ -170,6 +173,8 @@ class attack_def:
 				deck.append(card["effect"])
 
 				card["effect"] = ""
+
+		random.shuffle(deck)
 
 		for card in hand[1]:
 			if not deck:
@@ -241,3 +246,6 @@ class defend_atk:
 class defend_def:
 	def __new__(self):
 		raise Exception("Cannot instantiate this class.")
+
+	def chaos(deck, hand):
+		draw(deck, hand, range(6))
